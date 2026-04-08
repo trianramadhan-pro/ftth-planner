@@ -24,13 +24,12 @@ def save_projects(projects_list):
 # =========================================================
 # VARIABEL SISTEM & CHANGELOG
 # =========================================================
-APP_VERSION = "v1.4.1 (UI Hotfix)"
+APP_VERSION = "v1.4.2 (UI Stabil)"
 CHANGELOG = """
-**Catatan Rilis & Perbaikan (v1.4.1):**
-- 🎨 **Fix (UI):** Tampilan daftar proyek telah dioptimalkan secara *native*. Sekarang mendukung **Dark Mode** & **Light Mode** secara otomatis.
-- 📱 **Fix (Mobile):** Tombol "Buka/Edit" dan "Hapus" kini dipaksa tetap **berdampingan 50:50** di layar HP (tidak lagi bertumpuk raksasa ke bawah).
-- 💾 **Fitur:** Data tersimpan secara permanen ke `proyek_ftth.json`.
-- 🔄 **Routing:** Proyek dari Dashboard akan otomatis terbuka di fitur kalkulator asalnya (Auto/Advance).
+**Catatan Rilis & Perbaikan (v1.4.2):**
+- 🎨 **Fix (Overflow UI):** Menghapus CSS Hack yang menyebabkan tombol "keluar dari kotak" di layar HP sempit.
+- 📱 **New Layout:** Kartu proyek di Dashboard kini menggunakan layout susun (*Stack Layout*) bawaan Streamlit yang dijamin 100% responsif tanpa merusak border.
+- 💾 **Fitur:** Data tetap aman di `proyek_ftth.json`.
 """
 
 # ---------------------------------------------------------
@@ -39,7 +38,7 @@ CHANGELOG = """
 st.set_page_config(page_title="FTTH Planner", page_icon="🌐", layout="centered", initial_sidebar_state="collapsed")
 
 # ---------------------------------------------------------
-# 2. INJEKSI CUSTOM CSS UNTUK MOBILE & WARNA
+# 2. INJEKSI CUSTOM CSS UNTUK TEMA BERSIH
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -52,26 +51,11 @@ st.markdown("""
     .timeline-node.terminasi { border-left-color: #28A745; }
     .timeline-node.terminasi::before { background: #28A745; }
     
-    /* Box warna cerah untuk hasil Kalkulator (Tetap statis karena kontras dengan tulisan putih) */
     .rx-box { padding: 4px 10px; border-radius: 5px; font-weight: bold; color: #ffffff !important; display: inline-block; margin-top: 4px; }
     .rx-aman { background-color: #2ECC71; } .rx-bahaya { background-color: #E74C3C; }
     
-    /* =====================================================
-       CSS HACK SUPER MOBILE: Memaksa st.columns tetap sejajar di HP!
-       Ini akan mencegah tombol Buka & Hapus bertumpuk ke bawah.
-       ===================================================== */
-    @media screen and (max-width: 768px) {
-        div[data-testid="stHorizontalBlock"] {
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
-            gap: 10px !important;
-        }
-        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-            width: 100% !important;
-            flex: 1 1 0% !important;
-            min-width: 0 !important;
-        }
-    }
+    /* Memperkecil margin agar kartu proyek lebih compact */
+    div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -109,7 +93,6 @@ def go_dashboard_and_reset():
 def show_dashboard():
     st.title("🌐 FTTH Planner")
     
-    # Changelog bisa dibuka tutup (Tersimpan di atas)
     with st.expander(f"🚀 Info Rilis & Changelog ({APP_VERSION})"):
         st.markdown(CHANGELOG)
 
@@ -117,39 +100,43 @@ def show_dashboard():
     st.write("---")
     
     st.markdown("### 📡 Kalkulator Redaman")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan untuk Spliter Rasio maupun PLC di 1 titik ODP.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan di 1 titik ODP.</p>", unsafe_allow_html=True)
     if st.button("Buka Kalkulator", key="btn_kalkulator", use_container_width=True, type="primary"): st.session_state.page = 'Kalkulator'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🔗 Auto Planner (Linear)")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Otomatisasi draf topologi ODP berantai lurus dari OLT ke tiang akhir.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Draf topologi ODP berantai otomatis.</p>", unsafe_allow_html=True)
     if st.button("Buka Auto Planner", key="btn_auto", use_container_width=True, type="primary"): st.session_state.page = 'AutoPlanner'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🖧 Advance Planner")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif topologi kompleks.</p>", unsafe_allow_html=True)
     if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"): st.session_state.page = 'AdvancePlanner'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
     
     # -------------------------------------
-    # RENDER DAFTAR PROYEK (NATIVE UI - SUPPORT DARK MODE)
+    # RENDER DAFTAR PROYEK (UI AMAN & STABIL)
     # -------------------------------------
     st.markdown("### 📁 Proyek Tersimpan")
     if len(st.session_state.saved_projects) > 0:
         for i, proj in enumerate(reversed(st.session_state.saved_projects)):
             real_index = len(st.session_state.saved_projects) - 1 - i
             
-            # Menggunakan Native Container (Cocok untuk Dark Mode & Light Mode)
             with st.container(border=True):
-                st.subheader(f"📂 {proj['nama']}")
-                st.markdown(f"**Mode:** `{proj['tipe']}` &nbsp;|&nbsp; **Power:** `{proj['power']} dBm` &nbsp;|&nbsp; **Total:** `{proj['nodes']} ODP`")
-                st.caption(f"🕒 Terakhir dimodifikasi: {proj['date']}")
-                st.info(f"**Ringkasan Spliter:**\n{proj['summary']}")
+                # Baris 1: Judul dan Badge
+                st.markdown(f"#### 📂 {proj['nama']} <span style='font-size:12px; font-weight:normal; background:#4CAF50; color:white; padding:3px 8px; border-radius:12px; vertical-align:middle; margin-left:5px;'>{proj['tipe']}</span>", unsafe_allow_html=True)
                 
-                # Tombol Aksi Berdampingan (Di-handle CSS HACK agar tidak turun di HP)
+                # Baris 2: Info Angka
+                st.markdown(f"**⚡ {proj['power']} dBm** &nbsp;|&nbsp; **📍 {proj['nodes']} ODP** &nbsp;|&nbsp; 🕒 {proj['date']}")
+                
+                # Baris 3: Summary (bisa dibuka tutup agar rapi)
+                with st.expander("Lihat Detail Spliter"):
+                    st.caption(proj['summary'])
+                
+                # Baris 4: Tombol Aksi (Menggunakan kolom native, aman di HP)
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
-                    if st.button("✏️ Buka / Edit", key=f"edit_{real_index}", use_container_width=True):
+                    if st.button("✏️ Buka Proyek", key=f"edit_{real_index}", use_container_width=True):
                         st.session_state.ap_topologi = proj['data']
                         st.session_state.ap_params = proj['params']
                         st.session_state.ap_summary = proj['summary']
@@ -160,12 +147,12 @@ def show_dashboard():
                             st.session_state.page = 'AdvancePlanner'
                         st.rerun()
                 with col_btn2:
-                    if st.button("🗑️ Hapus Proyek", key=f"del_{real_index}", use_container_width=True):
+                    if st.button("🗑️ Hapus", key=f"del_{real_index}", use_container_width=True):
                         st.session_state.saved_projects.pop(real_index)
-                        save_projects(st.session_state.saved_projects) # Hapus dr JSON
+                        save_projects(st.session_state.saved_projects)
                         st.rerun()
     else:
-        st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru yang akan tersimpan permanen.")
+        st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru.")
 
 # ---------------------------------------------------------
 # 6. HALAMAN: KALKULATOR REDAMAN
@@ -283,7 +270,7 @@ def show_autoplanner():
         topologi = st.session_state.ap_topologi
         st.write("---")
         st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
-        st.info(f"**Tipe Spliter:**\n{st.session_state.ap_summary}")
+        st.caption(f"**Info:** {st.session_state.ap_summary}")
         
         st.markdown("**Simpan / Ekspor Hasil:**")
         nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar", key="input_nama_proyek")
@@ -338,7 +325,7 @@ def show_advance():
         return
 
     st.markdown(f"**Sumber OLT Backbone:** `{st.session_state.ap_params.get('p_in', 0):+.2f} dBm`")
-    st.info(f"**Tipe Spliter:**\n{st.session_state.ap_summary}")
+    st.caption(st.session_state.ap_summary)
     st.write("Daftar Node (Mode Edit Interaktif sedang dibangun):")
     
     for i, node in enumerate(draf):
