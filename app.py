@@ -73,14 +73,13 @@ LOSS_SPLICING = 0.03
 if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
 if 'saved_projects' not in st.session_state: st.session_state.saved_projects = []
 
-# State untuk menyimpan memori sementara
 if 'ap_generated' not in st.session_state: st.session_state.ap_generated = False
 if 'ap_topologi' not in st.session_state: st.session_state.ap_topologi = []
 if 'ap_summary' not in st.session_state: st.session_state.ap_summary = ""
 if 'ap_params' not in st.session_state: st.session_state.ap_params = {}
 
 def go_dashboard_and_reset():
-    """Fungsi sakti untuk mereset tampilan kembali bersih saat menekan tombol Kembali"""
+    """Mengosongkan layar hasil dan kembali ke beranda"""
     st.session_state.ap_generated = False
     st.session_state.page = 'Dashboard'
     st.rerun()
@@ -119,30 +118,35 @@ def show_dashboard():
         for i, proj in enumerate(reversed(st.session_state.saved_projects)):
             real_index = len(st.session_state.saved_projects) - 1 - i
             
-            st.markdown(f"""
-            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 5px; border-left: 4px solid #28A745; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <strong style="font-size:16px; color:#333;">{proj['nama']}</strong> 
-                <span style="font-size:11px; background:#e9ecef; padding:2px 6px; border-radius:4px; color:#555; margin-left:5px;">{proj['tipe']}</span><br>
-                <span style="font-size: 12px; color: #666;">🕒 Modifikasi: {proj['date']}</span><br>
-                <span style="font-size: 13px; color: #007BFF; font-weight:600;">{proj['nodes']} ODP | Power Awal: {proj['power']} dBm</span><br>
-                <span style="font-size: 12px; color: gray;"><i>{proj['summary']}</i></span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                # Tombol Buka akan memuat data ke memori dan langsung melempar ke Advance Planner
-                if st.button("✏️ Buka / Edit", key=f"edit_{real_index}", use_container_width=True):
-                    st.session_state.ap_topologi = proj['data']
-                    st.session_state.ap_params = proj['params']
-                    st.session_state.ap_summary = proj['summary']
-                    st.session_state.page = 'AdvancePlanner'
-                    st.rerun()
-            with btn_col2:
-                if st.button("🗑️ Hapus", key=f"del_{real_index}", use_container_width=True):
-                    st.session_state.saved_projects.pop(real_index)
-                    st.rerun()
-            st.write("") # Spasi antar proyek
+            # Container border untuk membuat kartu
+            with st.container(border=True):
+                # Kolom rasio 8:1:1 membuat tombol terpojok ke kanan dan berukuran kecil
+                col_text, col_edit, col_del = st.columns([8, 1.5, 1.5])
+                
+                with col_text:
+                    st.markdown(f"**{proj['nama']}** <span style='font-size:11px; background:#e9ecef; padding:2px 6px; border-radius:4px; color:#555;'>{proj['tipe']}</span>", unsafe_allow_html=True)
+                    st.caption(f"🕒 {proj['date']} | ⚡ {proj['power']} dBm | 📍 {proj['nodes']} ODP")
+                    st.markdown(f"<span style='font-size: 12px; color: gray;'>{proj['summary']}</span>", unsafe_allow_html=True)
+                
+                with col_edit:
+                    if st.button("✏️", key=f"edit_{real_index}", help="Buka Proyek", use_container_width=True):
+                        # Pemuatan data ke memori sementara
+                        st.session_state.ap_topologi = proj['data']
+                        st.session_state.ap_params = proj['params']
+                        st.session_state.ap_summary = proj['summary']
+                        
+                        # Cerdas me-Routing halaman sesuai tipe proyek
+                        if proj['tipe'] == "Auto Planner":
+                            st.session_state.ap_generated = True
+                            st.session_state.page = 'AutoPlanner'
+                        else:
+                            st.session_state.page = 'AdvancePlanner'
+                        st.rerun()
+                        
+                with col_del:
+                    if st.button("🗑️", key=f"del_{real_index}", help="Hapus Proyek", use_container_width=True):
+                        st.session_state.saved_projects.pop(real_index)
+                        st.rerun()
     else:
         st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru.")
 
@@ -197,15 +201,23 @@ def to_excel(df):
 def show_autoplanner():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅", help="Kembali"): go_dashboard_and_reset()
+        if st.button("⬅", help="Kembali & Reset"): go_dashboard_and_reset()
     with col2: st.subheader("🔗 Auto Planner")
     
+    # Menarik parameter dari memori jika proyek dibuka dari Dashboard
+    loaded_params = st.session_state.get('ap_params', {})
+    
     with st.expander("⚙️ Parameter Jaringan", expanded=True):
-        p_in = st.number_input("Power OLT (dBm)", value=7.00, step=0.50)
-        l_rx = st.number_input("Limit Rx (dBm)", value=-25.00, step=0.50)
-        dist = st.number_input("Jarak Antar ODP (km)", value=0.10, step=0.05)
-        plc_type = st.selectbox("PLC ODP", options=list(LOSS_PLC.keys()), index=2)
-        conn = st.number_input("Konektor/ODP", value=2, step=1)
+        p_in = st.number_input("Power OLT (dBm)", value=float(loaded_params.get("p_in", 7.00)), step=0.50)
+        l_rx = st.number_input("Limit Rx (dBm)", value=float(loaded_params.get("l_rx", -25.00)), step=0.50)
+        dist = st.number_input("Jarak Antar ODP (km)", value=float(loaded_params.get("dist", 0.10)), step=0.05)
+        
+        plc_keys = list(LOSS_PLC.keys())
+        saved_plc = loaded_params.get("plc_type", "1:8")
+        plc_idx = plc_keys.index(saved_plc) if saved_plc in plc_keys else 2
+        plc_type = st.selectbox("PLC ODP", options=plc_keys, index=plc_idx)
+        
+        conn = st.number_input("Konektor/ODP", value=int(loaded_params.get("conn", 2)), step=1)
 
     if st.button("🚀 Generate Topologi", use_container_width=True, type="primary"):
         topologi = []
@@ -256,7 +268,11 @@ def show_autoplanner():
 
             st.session_state.ap_topologi = topologi
             st.session_state.ap_summary = summary_text
-            st.session_state.ap_params = {"p_in": p_in, "l_rx": l_rx, "l_plc": l_plc}
+            # Simpan seluruh parameter konfigurasi agar bisa diload ulang sempurna
+            st.session_state.ap_params = {
+                "p_in": p_in, "l_rx": l_rx, "dist": dist, 
+                "plc_type": plc_type, "conn": conn, "l_plc": l_plc
+            }
             st.session_state.ap_generated = True
 
     # -----------------------------------------------------------------
@@ -269,7 +285,7 @@ def show_autoplanner():
         st.caption(st.session_state.ap_summary)
         
         st.markdown("**Simpan / Ekspor Hasil:**")
-        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar", key="input_nama_proyek")
+        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Distribusi Mawar", key="input_nama_proyek")
         
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
@@ -332,7 +348,7 @@ def show_advance():
         st.info("Pilih proyek dari **Dashboard** atau buat draf di **Auto Planner** terlebih dahulu.")
         return
 
-    st.markdown(f"**Sumber OLT Backbone:** `{st.session_state.ap_params['p_in']:+.2f} dBm`")
+    st.markdown(f"**Sumber OLT Backbone:** `{st.session_state.ap_params.get('p_in', 0):+.2f} dBm`")
     st.caption(st.session_state.ap_summary)
     st.write("Daftar Node (Mode Edit Interaktif sedang dibangun):")
     
