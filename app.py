@@ -13,7 +13,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. INJEKSI CUSTOM CSS UNTUK UI BERSIH
+# 2. INJEKSI CUSTOM CSS
 # ---------------------------------------------------------
 st.markdown("""
     <style>
@@ -22,23 +22,34 @@ st.markdown("""
     div.stButton > button { border-radius: 8px; font-weight: 600; padding: 10px 0; }
     hr { margin: 15px 0 25px 0 !important; border-color: #eeeeee; }
     
-    /* Style untuk Timeline Node di Auto Planner */
     .timeline-node {
         border-left: 4px solid #007BFF;
         padding-left: 15px;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
         position: relative;
     }
     .timeline-node::before {
         content: '';
         position: absolute;
-        width: 12px; height: 12px;
+        width: 14px; height: 14px;
         background: #007BFF;
         border-radius: 50%;
-        left: -8px; top: 0;
+        left: -9px; top: 0;
     }
     .timeline-node.terminasi { border-left-color: #28A745; }
     .timeline-node.terminasi::before { background: #28A745; }
+
+    /* Box Hasil Rx dengan kontras tinggi */
+    .rx-box {
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-weight: bold;
+        color: #000000 !important; /* Memastikan teks tetap hitam */
+        display: inline-block;
+        margin-top: 5px;
+    }
+    .rx-aman { background-color: #2ECC71; }
+    .rx-bahaya { background-color: #E74C3C; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -72,197 +83,114 @@ if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
 def change_page(page_name): st.session_state.page = page_name
 
 # ---------------------------------------------------------
-# 5. HALAMAN: DASHBOARD
+# 5. DASHBOARD
 # ---------------------------------------------------------
 def show_dashboard():
     st.title("🌐 FTTH Planner")
     st.markdown("Halo, **Engineer!**\nMari rencanakan jaringan hari ini.")
     st.write("---")
     
-    st.markdown("### 📡 Kalkulator Redaman")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan untuk Spliter Rasio maupun PLC di 1 titik ODP.</p>", unsafe_allow_html=True)
-    if st.button("Buka Kalkulator", key="btn_kalkulator", use_container_width=True, type="primary"): change_page('Kalkulator'); st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
+    if st.button("📡 Kalkulator Redaman", key="btn_kalkulator", use_container_width=True, type="primary"): 
+        change_page('Kalkulator'); st.rerun()
+    st.write("")
+    if st.button("🔗 Auto Planner (Linear)", key="btn_auto", use_container_width=True, type="primary"): 
+        change_page('AutoPlanner'); st.rerun()
+    st.write("")
+    if st.button("🖧 Advance Planner", key="btn_advance", use_container_width=True, type="primary"): 
+        change_page('AdvancePlanner'); st.rerun()
 
-    st.markdown("### 🔗 Auto Planner (Linear)")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Otomatisasi draf topologi ODP berantai lurus dari OLT ke tiang akhir.</p>", unsafe_allow_html=True)
-    if st.button("Buka Auto Planner", key="btn_auto", use_container_width=True, type="primary"): change_page('AutoPlanner'); st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    st.markdown("### 🖧 Advance Planner")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks dan sisip sistem ODC.</p>", unsafe_allow_html=True)
-    if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"): change_page('AdvancePlanner'); st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
-    
+    st.write("---")
     st.markdown("### 📁 Proyek Terakhir")
     st.info("Belum ada proyek yang disimpan.")
 
 # ---------------------------------------------------------
-# 6. HALAMAN: KALKULATOR RASIO (Dari Revisi Sebelumnya)
+# 6. KALKULATOR
 # ---------------------------------------------------------
 def show_kalkulator():
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
-    with col2: st.subheader("📡 Kalkulator Redaman")
+    if st.button("⬅ Kembali"): change_page('Dashboard'); st.rerun()
+    st.subheader("📡 Kalkulator Redaman")
     st.write("---")
 
-    power_in = st.number_input("Power Input (dBm)", value=7.00, step=0.50, format="%.2f")
-    opsi_splitter = list(LOSS_RASIO.keys()) + ["--- PLC Splitter ---"] + list(LOSS_PLC.keys())
-    pilihan = st.selectbox("Pilih Jenis Splitter", options=opsi_splitter, index=9)
-    if pilihan == "--- PLC Splitter ---": st.warning("Pilih rasio/PLC valid."); return
-
-    with st.expander("Redaman Jalur / Kabel (Opsional)"):
-        jarak_km = st.number_input("Jarak Kabel (km)", value=0.0, step=0.1, format="%.2f")
-        jml_konektor = st.number_input("Jumlah Konektor", value=0, step=1)
-        jml_splicing = st.number_input("Jumlah Splicing", value=0, step=1)
+    power_in = st.number_input("Power Input (dBm)", value=7.00, step=0.50)
+    opsi = list(LOSS_RASIO.keys()) + ["--- PLC ---"] + list(LOSS_PLC.keys())
+    pilihan = st.selectbox("Splitter", options=opsi, index=9)
     
-    loss_jalur = (jarak_km * LOSS_KABEL_PER_KM) + (jml_konektor * LOSS_KONEKTOR) + (jml_splicing * LOSS_SPLICING)
-    power_sebelum_split = power_in - loss_jalur
-    st.write("---")
-    
-    if pilihan in LOSS_RASIO:
-        lk, lb = LOSS_RASIO[pilihan][0], LOSS_RASIO[pilihan][1]
-        ok, ob = power_sebelum_split - lk, power_sebelum_split - lb
-        c1, c2 = st.columns(2)
-        with c1: st.markdown(f'<div style="background:#E74C3C;color:white;padding:15px;border-radius:8px;text-align:center;">Kaki Kecil ({pilihan.split(":")[0]}%)<br><b style="font-size:24px;">{ok:+.2f} dBm</b><br><small>Loss: {lk} dB</small></div>', unsafe_allow_html=True)
-        with c2: st.markdown(f'<div style="background:#3498DB;color:white;padding:15px;border-radius:8px;text-align:center;">Kaki Besar ({pilihan.split(":")[1]}%)<br><b style="font-size:24px;">{ob:+.2f} dBm</b><br><small>Loss: {lb} dB</small></div>', unsafe_allow_html=True)
-    elif pilihan in LOSS_PLC:
+    if "PLC" in pilihan and pilihan != "--- PLC ---":
         l_plc = LOSS_PLC[pilihan]
-        o_plc = power_sebelum_split - l_plc
-        st.markdown(f'<div style="background:#2ECC71;color:white;padding:15px;border-radius:8px;text-align:center;">Output PLC ({pilihan})<br><b style="font-size:24px;">{o_plc:+.2f} dBm</b><br><small>Loss: {l_plc} dB</small></div>', unsafe_allow_html=True)
+        out = power_in - l_plc
+        st.success(f"Output: {out:+.2f} dBm (Loss: {l_plc} dB)")
+    elif pilihan in LOSS_RASIO:
+        lk, lb = LOSS_RASIO[pilihan]
+        st.write(f"Kaki Kecil: **{(power_in-lk):+.2f} dBm** | Kaki Besar: **{(power_in-lb):+.2f} dBm**")
 
 # ---------------------------------------------------------
-# 7. HALAMAN: AUTO PLANNER (LOGIKA INTI)
+# 7. AUTO PLANNER (FIX LOGIC & UI)
 # ---------------------------------------------------------
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Topologi')
+        df.to_excel(writer, index=False)
     return output.getvalue()
 
 def show_autoplanner():
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
-    with col2: st.subheader("🔗 Auto Planner")
-    st.write("---")
+    if st.button("⬅ Kembali"): change_page('Dashboard'); st.rerun()
+    st.subheader("🔗 Auto Planner")
+    
+    with st.expander("⚙️ Parameter", expanded=True):
+        p_in = st.number_input("Power OLT (dBm)", value=7.00)
+        l_rx = st.number_input("Limit Rx (dBm)", value=-25.00)
+        dist = st.number_input("Jarak Antar ODP (km)", value=0.10)
+        plc_type = st.selectbox("PLC ODP", options=list(LOSS_PLC.keys()), index=2)
+        conn = st.number_input("Konektor/ODP", value=2)
 
-    # --- FORM PARAMETER ---
-    with st.expander("⚙️ Parameter Jaringan", expanded=True):
-        power_in = st.number_input("Power SFP/OLT (dBm)", value=7.00, step=0.50, format="%.2f")
-        limit_rx = st.number_input("Target Rx Minimum ONT (dBm)", value=-25.00, step=0.50, format="%.2f")
-        jarak_antar_odp = st.number_input("Jarak rata-rata antar ODP (km)", value=0.10, step=0.05, format="%.2f")
-        plc_odp = st.selectbox("Spliter di dalam ODP", options=list(LOSS_PLC.keys()), index=2) # Default 1:8
-        
-        st.markdown("**Pengaturan Loss Lanjutan:**")
-        colA, colB = st.columns(2)
-        with colA: konektor_per_odp = st.number_input("Konektor/ODP (pcs)", value=2, step=1, help="Barel/Fast Connector")
-        with colB: splice_per_odp = st.number_input("Splicing/ODP (pcs)", value=0, step=1)
-
-    if st.button("🚀 Generate Topologi", use_container_width=True, type="primary"):
-        st.write("---")
-        
-        # Inisialisasi Variabel Looping
+    if st.button("🚀 Generate", use_container_width=True, type="primary"):
         topologi = []
-        sisa_power = power_in
-        jarak_akumulasi = 0.0
-        odp_ke = 1
-        loss_plc_val = LOSS_PLC[plc_odp]
-        loss_node_tambahan = (konektor_per_odp * LOSS_KONEKTOR) + (splice_per_odp * LOSS_SPLICING)
-        
-        # ALGORITMA PENCARIAN
+        curr_p = p_in
+        total_d = 0.0
+        idx = 1
+        l_plc = LOSS_PLC[plc_type]
+        l_extra = conn * LOSS_KONEKTOR
+
         while True:
-            # 1. Hitung redaman kabel menuju tiang ini
-            loss_kabel = jarak_antar_odp * LOSS_KABEL_PER_KM
-            power_sampai_tiang = sisa_power - loss_kabel - loss_node_tambahan
-            jarak_akumulasi += jarak_antar_odp
+            total_d += dist
+            p_tiang = curr_p - (dist * LOSS_KABEL_PER_KM) - l_extra
             
-            rasio_terpilih = None
-            
-            # 2. Iterasi mencari rasio yang pas (dari 01:99 ke 50:50)
-            for rasio, losses in LOSS_RASIO.items():
-                loss_drop = losses[0]  # Kaki Kecil untuk pelanggan
-                loss_pass = losses[1]  # Kaki Besar untuk lanjut
-                
-                rx_sementara = power_sampai_tiang - loss_drop - loss_plc_val
-                
-                # Jika rx pelanggan aman, kunci rasio ini!
-                if rx_sementara >= limit_rx:
-                    rasio_terpilih = rasio
-                    rx_final = rx_sementara
-                    power_lanjut = power_sampai_tiang - loss_pass
+            best_r = None
+            # Cari rasio dari 01:99 ke 50:50
+            for r, loss in LOSS_RASIO.items():
+                rx = p_tiang - loss[0] - l_plc
+                if rx >= l_rx:
+                    best_r, rx_f, p_next = r, rx, p_tiang - loss[1]
                     break
             
-            # 3. Eksekusi Hasil Pencarian
-            if rasio_terpilih:
-                topologi.append({
-                    "Node": f"ODP {odp_ke}",
-                    "Tipe": "Rasio",
-                    "Rasio/PLC": rasio_terpilih,
-                    "Jarak_Total": round(jarak_akumulasi, 2),
-                    "Power_In_Tiang": round(power_sampai_tiang, 2),
-                    "Rx_ONT": round(rx_final, 2),
-                    "Power_Lanjut": round(power_lanjut, 2)
-                })
-                sisa_power = power_lanjut
-                odp_ke += 1
+            if best_r:
+                topologi.append({"Node": f"ODP {idx}", "Tipe": "Rasio", "Rasio": best_r, "Jarak": round(total_d,2), "Rx": round(rx_f,2), "Next": round(p_next,2)})
+                curr_p, idx = p_next, idx + 1
             else:
-                # 4. Jika semua rasio gagal, cek apakah bisa langsung Terminasi ke PLC (End Node)
-                rx_terminasi = power_sampai_tiang - loss_plc_val
-                if rx_terminasi >= limit_rx:
-                    topologi.append({
-                        "Node": f"ODP {odp_ke}",
-                        "Tipe": "Terminasi",
-                        "Rasio/PLC": "Direct PLC",
-                        "Jarak_Total": round(jarak_akumulasi, 2),
-                        "Power_In_Tiang": round(power_sampai_tiang, 2),
-                        "Rx_ONT": round(rx_terminasi, 2),
-                        "Power_Lanjut": None
-                    })
-                # Apapun hasil terminasi, looping jalur utama berhenti di sini
+                # Cek Terminasi
+                rx_t = p_tiang - l_plc
+                if rx_t >= l_rx:
+                    topologi.append({"Node": f"ODP {idx}", "Tipe": "Terminasi", "Rasio": "Direct PLC", "Jarak": round(total_d,2), "Rx": round(rx_t,2), "Next": None})
                 break
-        
-        # --- RENDER HASIL VISUAL ---
-        if len(topologi) == 0:
-            st.error("Gagal membuat topologi. Target Rx terlalu ketat atau Power awal terlalu kecil.")
+
+        if not topologi:
+            st.error("Power tidak cukup untuk ODP pertama.")
         else:
-            st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
-            
-            # Tombol Export Excel
-            df_export = pd.DataFrame(topologi)
-            excel_data = to_excel(df_export)
-            st.download_button(label="📊 Ekspor Data ke Excel", data=excel_data, file_name='Topologi_FTTH.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', use_container_width=True)
-            
-            st.write("")
-            
-            # Render Timeline
-            for data in topologi:
-                is_terminasi = (data['Tipe'] == 'Terminasi')
-                css_class = "timeline-node terminasi" if is_terminasi else "timeline-node"
+            st.download_button("📊 Export Excel", data=to_excel(pd.DataFrame(topologi)), file_name="ftth_plan.xlsx", use_container_width=True)
+            for d in topologi:
+                is_t = d['Tipe'] == "Terminasi"
+                cls = "timeline-node terminasi" if is_t else "timeline-node"
+                # Logika Warna
+                rx_cls = "rx-aman" if d['Rx'] >= l_rx else "rx-bahaya"
                 
                 st.markdown(f"""
-                <div class="{css_class}">
-                    <b>{data['Node']}</b> ({data['Jarak_Total']} km)<br>
-                    <span style="color: gray; font-size: 13px;">Power In: {data['Power_In_Tiang']:+.2f} dBm</span><br>
-                    {'<span style="color: #28A745; font-weight: bold;">🏁 TERMINASI JALUR</span><br>' if is_terminasi else f"Pasang Rasio: <b>{data['Rasio/PLC']}</b><br>"}
-                    <span style="background-color: #f8f9fa; padding: 2px 5px; border-radius: 4px;">Rx di ONT: <b>{data['Rx_ONT']:+.2f} dBm</b></span><br>
-                    {"" if is_terminasi else f"<span style='color: #007BFF; font-size: 13px;'>Power Lanjut: {data['Power_Lanjut']:+.2f} dBm</span>"}
+                <div class="{cls}">
+                    <b>{d['Node']}</b> ({d['Jarak']} km)<br>
+                    { '🏁 <b>TERMINASI</b>' if is_t else f'Rasio: <b>{d["Rasio"]}</b>' }<br>
+                    <div class="rx-box {rx_cls}">Rx ONT: {d['Rx']:+.2f} dBm</div><br>
+                    { f'<small style="color:#007BFF">Lanjut: {d["Next"]:+.2f} dBm</small>' if not is_t else '' }
                 </div>
                 """, unsafe_allow_html=True)
-            
-            st.info("Pindah ke fitur **Advance Planner** untuk memodifikasi hasil draf ini secara manual (Segera Hadir).")
-
-# ---------------------------------------------------------
-# 8. HALAMAN: ADVANCE PLANNER
-# ---------------------------------------------------------
-def show_advance():
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
-    with col2: st.subheader("🖧 Advance Planner")
-    st.write("---")
-    st.warning("Kanvas visual sedang disiapkan untuk tahap pengerjaan berikutnya.")
 
 # ---------------------------------------------------------
 # ROUTER
@@ -270,4 +198,6 @@ def show_advance():
 if st.session_state.page == 'Dashboard': show_dashboard()
 elif st.session_state.page == 'Kalkulator': show_kalkulator()
 elif st.session_state.page == 'AutoPlanner': show_autoplanner()
-elif st.session_state.page == 'AdvancePlanner': show_advance()
+elif st.session_state.page == 'AdvancePlanner': 
+    if st.button("⬅ Kembali"): change_page('Dashboard'); st.rerun()
+    st.write("Advance Planner - Coming Soon")
