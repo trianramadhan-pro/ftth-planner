@@ -11,28 +11,26 @@ from datetime import datetime
 DB_FILE = "proyek_ftth.json"
 
 def load_projects():
-    """Membaca proyek dari file JSON di hardisk/server"""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
+            try: return json.load(f)
+            except: return []
     return []
 
 def save_projects(projects_list):
-    """Menulis proyek ke file JSON agar permanen"""
     with open(DB_FILE, "w") as f:
         json.dump(projects_list, f, indent=4)
 
 # =========================================================
 # VARIABEL SISTEM & CHANGELOG
 # =========================================================
-APP_VERSION = "v1.4.0 (Persistent)"
+APP_VERSION = "v1.4.1 (UI Hotfix)"
 CHANGELOG = """
-**Catatan Rilis & Perbaikan (v1.4.0):**
-- 💾 **New (Database Lokal):** Proyek kini disimpan secara fisik ke dalam file `proyek_ftth.json`. Menekan F5, Refresh, atau menutup browser tidak akan menghapus data proyek Anda lagi!
-- 🐛 **Fix:** Mempertahankan CSS Flexbox untuk tampilan mobile.
+**Catatan Rilis & Perbaikan (v1.4.1):**
+- 🎨 **Fix (UI):** Tampilan daftar proyek telah dioptimalkan secara *native*. Sekarang mendukung **Dark Mode** & **Light Mode** secara otomatis.
+- 📱 **Fix (Mobile):** Tombol "Buka/Edit" dan "Hapus" kini dipaksa tetap **berdampingan 50:50** di layar HP (tidak lagi bertumpuk raksasa ke bawah).
+- 💾 **Fitur:** Data tersimpan secara permanen ke `proyek_ftth.json`.
+- 🔄 **Routing:** Proyek dari Dashboard akan otomatis terbuka di fitur kalkulator asalnya (Auto/Advance).
 """
 
 # ---------------------------------------------------------
@@ -41,34 +39,44 @@ CHANGELOG = """
 st.set_page_config(page_title="FTTH Planner", page_icon="🌐", layout="centered", initial_sidebar_state="collapsed")
 
 # ---------------------------------------------------------
-# 2. INJEKSI CUSTOM CSS
+# 2. INJEKSI CUSTOM CSS UNTUK MOBILE & WARNA
 # ---------------------------------------------------------
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     div.stButton > button { border-radius: 8px; font-weight: 600; padding: 10px 0; }
-    hr { margin: 15px 0 25px 0 !important; border-color: #eeeeee; }
+    hr { margin: 15px 0 25px 0 !important; border-color: #555555; opacity: 0.3; }
     
     .timeline-node { border-left: 4px solid #007BFF; padding-left: 15px; margin-bottom: 25px; position: relative; }
     .timeline-node::before { content: ''; position: absolute; width: 14px; height: 14px; background: #007BFF; border-radius: 50%; left: -9px; top: 0; }
     .timeline-node.terminasi { border-left-color: #28A745; }
     .timeline-node.terminasi::before { background: #28A745; }
-    .rx-box { padding: 4px 10px; border-radius: 5px; font-weight: bold; color: #000000 !important; display: inline-block; margin-top: 4px; }
+    
+    /* Box warna cerah untuk hasil Kalkulator (Tetap statis karena kontras dengan tulisan putih) */
+    .rx-box { padding: 4px 10px; border-radius: 5px; font-weight: bold; color: #ffffff !important; display: inline-block; margin-top: 4px; }
     .rx-aman { background-color: #2ECC71; } .rx-bahaya { background-color: #E74C3C; }
     
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] {
-        flex-direction: row !important; flex-wrap: nowrap !important; justify-content: flex-end !important; gap: 8px !important; margin-top: -10px;
+    /* =====================================================
+       CSS HACK SUPER MOBILE: Memaksa st.columns tetap sejajar di HP!
+       Ini akan mencegah tombol Buka & Hapus bertumpuk ke bawah.
+       ===================================================== */
+    @media screen and (max-width: 768px) {
+        div[data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 10px !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+        }
     }
-    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] [data-testid="column"] { min-width: max-content !important; width: auto !important; flex: 0 1 auto !important; }
-    [data-testid="stVerticalBlockBorderWrapper"] div.stButton > button {
-        padding: 4px 12px !important; font-size: 13px !important; font-weight: normal !important; height: auto !important; min-height: 0 !important; width: auto !important; border: 1px solid #ced4da !important; background-color: transparent !important; color: #495057 !important;
-    }
-    [data-testid="stVerticalBlockBorderWrapper"] div.stButton > button:hover { background-color: #f8f9fa !important; border-color: #6c757d !important; }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 3. DATABASE KONSTANTA REDAMAN
+# 3. KONSTANTA REDAMAN
 # ---------------------------------------------------------
 LOSS_RASIO = {
     "01:99": [20.20, 0.24], "02:98": [17.19, 0.29], "03:97": [15.43, 0.33], "04:96": [14.18, 0.38], "05:95": [13.21, 0.42], "06:94": [12.42, 0.47],
@@ -80,13 +88,10 @@ LOSS_PLC = {"1:2": 3.25, "1:4": 7.00, "1:8": 10.00, "1:16": 13.50, "1:32": 17.00
 LOSS_KABEL_PER_KM = 0.3; LOSS_KONEKTOR = 0.3; LOSS_SPLICING = 0.03
 
 # ---------------------------------------------------------
-# 4. STATE MANAGEMENT & NAVIGASI
+# 4. STATE MANAGEMENT
 # ---------------------------------------------------------
 if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
-
-# Load data permanen dari JSON ke state setiap kali aplikasi refresh
-if 'saved_projects' not in st.session_state: 
-    st.session_state.saved_projects = load_projects()
+if 'saved_projects' not in st.session_state: st.session_state.saved_projects = load_projects()
 
 if 'ap_generated' not in st.session_state: st.session_state.ap_generated = False
 if 'ap_topologi' not in st.session_state: st.session_state.ap_topologi = []
@@ -103,7 +108,11 @@ def go_dashboard_and_reset():
 # ---------------------------------------------------------
 def show_dashboard():
     st.title("🌐 FTTH Planner")
-    with st.expander(f"🛠️ Info Sistem & Changelog ({APP_VERSION})"): st.markdown(CHANGELOG)
+    
+    # Changelog bisa dibuka tutup (Tersimpan di atas)
+    with st.expander(f"🚀 Info Rilis & Changelog ({APP_VERSION})"):
+        st.markdown(CHANGELOG)
+
     st.markdown("Halo, **Engineer!**\nMari rencanakan jaringan hari ini.")
     st.write("---")
     
@@ -122,24 +131,25 @@ def show_dashboard():
     if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"): st.session_state.page = 'AdvancePlanner'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
     
-    # RENDER DAFTAR PROYEK (DARI DATABASE JSON)
+    # -------------------------------------
+    # RENDER DAFTAR PROYEK (NATIVE UI - SUPPORT DARK MODE)
+    # -------------------------------------
     st.markdown("### 📁 Proyek Tersimpan")
     if len(st.session_state.saved_projects) > 0:
         for i, proj in enumerate(reversed(st.session_state.saved_projects)):
             real_index = len(st.session_state.saved_projects) - 1 - i
+            
+            # Menggunakan Native Container (Cocok untuk Dark Mode & Light Mode)
             with st.container(border=True):
-                st.markdown(f"""
-                <div style="margin-bottom: 5px;">
-                    <strong style="font-size:16px; color:#ddd;">{proj['nama']}</strong> 
-                    <span style="font-size:10px; background:#4CAF50; color:white; padding:2px 6px; border-radius:4px; margin-left:5px;">{proj['tipe']}</span><br>
-                    <span style="font-size: 11px; color: gray;">🕒 {proj['date']} | ⚡ {proj['power']} dBm | 📍 {proj['nodes']} ODP</span><br>
-                    <span style="font-size: 12px; color: #aaa;"><i>{proj['summary']}</i></span>
-                </div>
-                """, unsafe_allow_html=True)
+                st.subheader(f"📂 {proj['nama']}")
+                st.markdown(f"**Mode:** `{proj['tipe']}` &nbsp;|&nbsp; **Power:** `{proj['power']} dBm` &nbsp;|&nbsp; **Total:** `{proj['nodes']} ODP`")
+                st.caption(f"🕒 Terakhir dimodifikasi: {proj['date']}")
+                st.info(f"**Ringkasan Spliter:**\n{proj['summary']}")
                 
+                # Tombol Aksi Berdampingan (Di-handle CSS HACK agar tidak turun di HP)
                 col_btn1, col_btn2 = st.columns(2)
                 with col_btn1:
-                    if st.button("✏️ Buka / Edit", key=f"edit_{real_index}"):
+                    if st.button("✏️ Buka / Edit", key=f"edit_{real_index}", use_container_width=True):
                         st.session_state.ap_topologi = proj['data']
                         st.session_state.ap_params = proj['params']
                         st.session_state.ap_summary = proj['summary']
@@ -150,14 +160,12 @@ def show_dashboard():
                             st.session_state.page = 'AdvancePlanner'
                         st.rerun()
                 with col_btn2:
-                    if st.button("🗑️ Hapus", key=f"del_{real_index}"):
-                        # Hapus dari state
+                    if st.button("🗑️ Hapus Proyek", key=f"del_{real_index}", use_container_width=True):
                         st.session_state.saved_projects.pop(real_index)
-                        # Simpan pembaruan (penghapusan) ke file JSON
-                        save_projects(st.session_state.saved_projects)
+                        save_projects(st.session_state.saved_projects) # Hapus dr JSON
                         st.rerun()
     else:
-        st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru.")
+        st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru yang akan tersimpan permanen.")
 
 # ---------------------------------------------------------
 # 6. HALAMAN: KALKULATOR REDAMAN
@@ -264,7 +272,7 @@ def show_autoplanner():
         else:
             summary_parts = [f"{count}x ({r})" for r, count in rasio_counts.items()]
             if topologi[-1]['Tipe'] == 'Terminasi': summary_parts.append("1x Terminasi")
-            summary_text = "Rasio: " + ", ".join(summary_parts) + f" | PLC {plc_type}."
+            summary_text = ", ".join(summary_parts) + f" | Kotak PLC {plc_type}"
 
             st.session_state.ap_topologi = topologi
             st.session_state.ap_summary = summary_text
@@ -275,7 +283,7 @@ def show_autoplanner():
         topologi = st.session_state.ap_topologi
         st.write("---")
         st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
-        st.caption(st.session_state.ap_summary)
+        st.info(f"**Tipe Spliter:**\n{st.session_state.ap_summary}")
         
         st.markdown("**Simpan / Ekspor Hasil:**")
         nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar", key="input_nama_proyek")
@@ -295,8 +303,7 @@ def show_autoplanner():
                         "date": datetime.now().strftime("%d %b %Y, %H:%M"), "data": topologi, "params": st.session_state.ap_params
                     }
                     st.session_state.saved_projects.append(new_project)
-                    # SIMPAN PERMANEN KE FILE JSON
-                    save_projects(st.session_state.saved_projects)
+                    save_projects(st.session_state.saved_projects) # Simpan JSON
                     st.success(f"Proyek disimpan secara permanen!")
 
         if st.button("✏️ Lanjut Edit di Advance Planner", use_container_width=True, type="primary"):
@@ -313,7 +320,7 @@ def show_autoplanner():
             info_kaki_kecil = f'<span style="font-size: 13px; color: gray;">Out Kaki Kecil: {d["Drop_Kecil"]:+.2f} dBm</span><br>'
             info_lanjut = f'<br><span style="color:#007BFF; font-weight:bold; font-size:14px;">⚡ Power Lanjut: {d["Next"]:+.2f} dBm</span>' if not is_t else ''
 
-            st.markdown(f'<div class="{cls}"><b>{d["Node"]}</b> ({d["Jarak"]} km)<br>{info_rasio}{info_kaki_kecil}<div class="rx-box {rx_cls}">Rx ONT: {d["Rx"]:+.2f} dBm</div>{info_lanjut}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="{cls}"><b>{d["Node"]}</b> ({d["Jarak"]} km)<br>{info_rasio}{info_kaki_kecil}<div class="rx-box {rx_cls}">{d["Rx"]:+.2f} dBm</div>{info_lanjut}</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # 8. HALAMAN: ADVANCE PLANNER
@@ -331,12 +338,15 @@ def show_advance():
         return
 
     st.markdown(f"**Sumber OLT Backbone:** `{st.session_state.ap_params.get('p_in', 0):+.2f} dBm`")
-    st.caption(st.session_state.ap_summary)
+    st.info(f"**Tipe Spliter:**\n{st.session_state.ap_summary}")
     st.write("Daftar Node (Mode Edit Interaktif sedang dibangun):")
     
     for i, node in enumerate(draf):
-        status_warna = "green" if node['Rx'] >= st.session_state.ap_params.get('l_rx', -25) else "red"
-        st.markdown(f'<div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #6c757d; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"><strong>{node["Node"]}</strong> <span style="color:gray; font-size:12px;">(Jarak Akumulasi: {node["Jarak"]} km)</span><br><span style="font-size: 14px;">Spliter: {node["Rasio"]}</span><br><span style="color:{status_warna}; font-weight:bold; font-size: 15px;">Rx ONT: {node["Rx"]:+.2f} dBm</span></div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            status_warna = "green" if node['Rx'] >= st.session_state.ap_params.get('l_rx', -25) else "red"
+            st.markdown(f"**{node['Node']}** <span style='font-size:12px; color:gray;'>({node['Jarak']} km)</span>", unsafe_allow_html=True)
+            st.markdown(f"Spliter: `{node['Rasio']}`")
+            st.markdown(f"<span style='color:{status_warna}; font-weight:bold; font-size: 16px;'>Rx ONT: {node['Rx']:+.2f} dBm</span>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # ROUTER
