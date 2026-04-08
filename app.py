@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-from datetime import datetime # Ditambahkan untuk tanggal proyek
+from datetime import datetime
 
 # ---------------------------------------------------------
 # 1. KONFIGURASI HALAMAN
@@ -25,10 +25,8 @@ st.markdown("""
     hr { margin: 15px 0 25px 0 !important; border-color: #eeeeee; }
     
     .timeline-node {
-        border-left: 4px solid #007BFF;
-        padding-left: 15px;
-        margin-bottom: 25px;
-        position: relative;
+        border-left: 4px solid #007BFF; padding-left: 15px;
+        margin-bottom: 25px; position: relative;
     }
     .timeline-node::before {
         content: ''; position: absolute; width: 14px; height: 14px;
@@ -43,9 +41,6 @@ st.markdown("""
     }
     .rx-aman { background-color: #2ECC71; }
     .rx-bahaya { background-color: #E74C3C; }
-    
-    /* Tombol Hapus Kecil di Dashboard */
-    .btn-hapus { margin-top: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -73,18 +68,22 @@ LOSS_KONEKTOR = 0.3
 LOSS_SPLICING = 0.03
 
 # ---------------------------------------------------------
-# 4. STATE MANAGEMENT (MEMORI APLIKASI)
+# 4. STATE MANAGEMENT & NAVIGASI
 # ---------------------------------------------------------
 if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
 if 'saved_projects' not in st.session_state: st.session_state.saved_projects = []
-# State untuk Auto Planner agar tidak hilang saat direfresh
+
+# State untuk menyimpan memori sementara
 if 'ap_generated' not in st.session_state: st.session_state.ap_generated = False
 if 'ap_topologi' not in st.session_state: st.session_state.ap_topologi = []
 if 'ap_summary' not in st.session_state: st.session_state.ap_summary = ""
 if 'ap_params' not in st.session_state: st.session_state.ap_params = {}
 
-def change_page(page_name): 
-    st.session_state.page = page_name
+def go_dashboard_and_reset():
+    """Fungsi sakti untuk mereset tampilan kembali bersih saat menekan tombol Kembali"""
+    st.session_state.ap_generated = False
+    st.session_state.page = 'Dashboard'
+    st.rerun()
 
 # ---------------------------------------------------------
 # 5. HALAMAN: DASHBOARD
@@ -97,44 +96,55 @@ def show_dashboard():
     st.markdown("### 📡 Kalkulator Redaman")
     st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan untuk Spliter Rasio maupun PLC di 1 titik ODP.</p>", unsafe_allow_html=True)
     if st.button("Buka Kalkulator", key="btn_kalkulator", use_container_width=True, type="primary"): 
-        change_page('Kalkulator'); st.rerun()
+        st.session_state.page = 'Kalkulator'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🔗 Auto Planner (Linear)")
     st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Otomatisasi draf topologi ODP berantai lurus dari OLT ke tiang akhir.</p>", unsafe_allow_html=True)
     if st.button("Buka Auto Planner", key="btn_auto", use_container_width=True, type="primary"): 
-        change_page('AutoPlanner'); st.rerun()
+        st.session_state.page = 'AutoPlanner'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🖧 Advance Planner")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks (Segera Hadir).</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks.</p>", unsafe_allow_html=True)
     if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"): 
-        change_page('AdvancePlanner'); st.rerun()
+        st.session_state.page = 'AdvancePlanner'; st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
     
+    # -------------------------------------
     # RENDER DAFTAR PROYEK TERSIMPAN
-    st.markdown("### 📁 Proyek Terakhir")
+    # -------------------------------------
+    st.markdown("### 📁 Proyek Tersimpan")
     if len(st.session_state.saved_projects) > 0:
-        # Menampilkan secara terbalik agar yang terbaru di atas
         for i, proj in enumerate(reversed(st.session_state.saved_projects)):
-            real_index = len(st.session_state.saved_projects) - 1 - i # Indeks asli untuk penghapusan
+            real_index = len(st.session_state.saved_projects) - 1 - i
             
             st.markdown(f"""
             <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 5px; border-left: 4px solid #28A745; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <strong style="font-size:16px; color:#333;">{proj['nama']}</strong><br>
-                <span style="font-size: 12px; color: #666;">📅 {proj['date']}</span><br>
-                <span style="font-size: 13px; color: #007BFF; font-weight:600;">{proj['nodes']} ODP | Power: {proj['power']} dBm</span><br>
+                <strong style="font-size:16px; color:#333;">{proj['nama']}</strong> 
+                <span style="font-size:11px; background:#e9ecef; padding:2px 6px; border-radius:4px; color:#555; margin-left:5px;">{proj['tipe']}</span><br>
+                <span style="font-size: 12px; color: #666;">🕒 Modifikasi: {proj['date']}</span><br>
+                <span style="font-size: 13px; color: #007BFF; font-weight:600;">{proj['nodes']} ODP | Power Awal: {proj['power']} dBm</span><br>
                 <span style="font-size: 12px; color: gray;"><i>{proj['summary']}</i></span>
             </div>
             """, unsafe_allow_html=True)
             
-            # Tombol Hapus Proyek
-            if st.button("🗑️ Hapus Proyek", key=f"del_{real_index}", use_container_width=False):
-                st.session_state.saved_projects.pop(real_index)
-                st.rerun()
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                # Tombol Buka akan memuat data ke memori dan langsung melempar ke Advance Planner
+                if st.button("✏️ Buka / Edit", key=f"edit_{real_index}", use_container_width=True):
+                    st.session_state.ap_topologi = proj['data']
+                    st.session_state.ap_params = proj['params']
+                    st.session_state.ap_summary = proj['summary']
+                    st.session_state.page = 'AdvancePlanner'
+                    st.rerun()
+            with btn_col2:
+                if st.button("🗑️ Hapus", key=f"del_{real_index}", use_container_width=True):
+                    st.session_state.saved_projects.pop(real_index)
+                    st.rerun()
             st.write("") # Spasi antar proyek
     else:
-        st.info("Belum ada proyek yang disimpan. Gunakan Auto Planner untuk membuat proyek baru.")
+        st.info("Belum ada proyek. Gunakan Auto Planner untuk membuat draf baru.")
 
 # ---------------------------------------------------------
 # 6. HALAMAN: KALKULATOR REDAMAN
@@ -142,11 +152,11 @@ def show_dashboard():
 def show_kalkulator():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅", help="Kembali"): change_page('Dashboard'); st.rerun()
+        if st.button("⬅", help="Kembali"): go_dashboard_and_reset()
     with col2: st.subheader("📡 Kalkulator Redaman")
     st.write("---")
 
-    with st.expander("📊 Lihat Tabel Referensi Redaman"):
+    with st.expander("📊 Lihat Tabel Referensi"):
         tb1, tb2 = st.columns(2)
         with tb1:
             st.markdown("**Spliter Rasio**")
@@ -187,7 +197,7 @@ def to_excel(df):
 def show_autoplanner():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅", help="Kembali"): change_page('Dashboard'); st.rerun()
+        if st.button("⬅", help="Kembali"): go_dashboard_and_reset()
     with col2: st.subheader("🔗 Auto Planner")
     
     with st.expander("⚙️ Parameter Jaringan", expanded=True):
@@ -197,7 +207,6 @@ def show_autoplanner():
         plc_type = st.selectbox("PLC ODP", options=list(LOSS_PLC.keys()), index=2)
         conn = st.number_input("Konektor/ODP", value=2, step=1)
 
-    # TOMBOL GENERATE (Hanya memproses kalkulasi & menyimpan ke state)
     if st.button("🚀 Generate Topologi", use_container_width=True, type="primary"):
         topologi = []
         curr_p = p_in
@@ -205,7 +214,7 @@ def show_autoplanner():
         idx = 1
         l_plc = LOSS_PLC[plc_type]
         l_extra = conn * LOSS_KONEKTOR
-        rasio_counts = {} # Untuk menghitung jumlah spliter
+        rasio_counts = {}
 
         while True:
             total_d += dist
@@ -241,31 +250,26 @@ def show_autoplanner():
             st.error("Power tidak cukup untuk ditarik ke ODP pertama.")
             st.session_state.ap_generated = False
         else:
-            # Generate Teks Rekapitulasi Spliter
-            summary_parts = []
-            for r, count in rasio_counts.items(): summary_parts.append(f"{count} spliter {r}")
-            if topologi[-1]['Tipe'] == 'Terminasi': summary_parts.append("1 direct terminasi")
-            summary_text = "Menggunakan: " + ", ".join(summary_parts) + f" (Sistem {plc_type})."
+            summary_parts = [f"{count} spliter {r}" for r, count in rasio_counts.items()]
+            if topologi[-1]['Tipe'] == 'Terminasi': summary_parts.append("1 terminasi direct")
+            summary_text = "Menggunakan: " + ", ".join(summary_parts) + f" ({plc_type})."
 
-            # SIMPAN KE MEMORI (STATE)
             st.session_state.ap_topologi = topologi
             st.session_state.ap_summary = summary_text
             st.session_state.ap_params = {"p_in": p_in, "l_rx": l_rx, "l_plc": l_plc}
             st.session_state.ap_generated = True
 
     # -----------------------------------------------------------------
-    # RENDER HASIL (Di luar tombol Generate agar tidak hilang saat interaksi)
+    # RENDER HASIL & MANAJEMEN SIMPAN
     # -----------------------------------------------------------------
     if st.session_state.ap_generated:
         topologi = st.session_state.ap_topologi
         st.write("---")
         st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
-        st.caption(st.session_state.ap_summary) # Menampilkan keterangan ringkasan spliter
+        st.caption(st.session_state.ap_summary)
         
-        # --- MANAJEMEN PENYIMPANAN & EKSPOR ---
         st.markdown("**Simpan / Ekspor Hasil:**")
-        # Menggunakan parameter 'key' sangat penting agar input tidak hilang
-        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar (Arah Utara)", key="input_nama_proyek")
+        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar", key="input_nama_proyek")
         
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
@@ -278,21 +282,22 @@ def show_autoplanner():
                 else:
                     st.session_state.saved_projects.append({
                         "nama": nama_proyek,
+                        "tipe": "Auto Planner",
                         "nodes": len(topologi),
                         "power": st.session_state.ap_params["p_in"],
                         "summary": st.session_state.ap_summary,
                         "date": datetime.now().strftime("%d %b %Y, %H:%M"),
-                        "data": topologi
+                        "data": topologi,
+                        "params": st.session_state.ap_params
                     })
-                    st.success(f"Proyek disimpan ke Dashboard!")
+                    st.success(f"Proyek disimpan! Cek menu Dashboard.")
 
         if st.button("✏️ Edit di Advance Planner", use_container_width=True, type="primary"):
-            change_page('AdvancePlanner')
+            st.session_state.page = 'AdvancePlanner'
             st.rerun()
 
         st.write("---")
         
-        # --- RENDER TIMELINE VISUAL ---
         for d in topologi:
             is_t = d['Tipe'] == "Terminasi"
             cls = "timeline-node terminasi" if is_t else "timeline-node"
@@ -313,31 +318,31 @@ def show_autoplanner():
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 8. HALAMAN: ADVANCE PLANNER
+# 8. HALAMAN: ADVANCE PLANNER (PROGRES)
 # ---------------------------------------------------------
 def show_advance():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
+        if st.button("⬅", help="Kembali"): go_dashboard_and_reset()
     with col2: st.subheader("🖧 Advance Planner")
     st.write("---")
     
     draf = st.session_state.get('ap_topologi', [])
     if not draf:
-        st.info("Buat draf di **Auto Planner** terlebih dahulu, lalu klik 'Edit di Advance Planner'.")
+        st.info("Pilih proyek dari **Dashboard** atau buat draf di **Auto Planner** terlebih dahulu.")
         return
 
-    st.markdown(f"**Sumber OLT:** `{st.session_state.ap_params['p_in']:+.2f} dBm`")
+    st.markdown(f"**Sumber OLT Backbone:** `{st.session_state.ap_params['p_in']:+.2f} dBm`")
     st.caption(st.session_state.ap_summary)
-    st.write("Daftar Node (Mode Edit sedang dibangun):")
+    st.write("Daftar Node (Mode Edit Interaktif sedang dibangun):")
     
     for i, node in enumerate(draf):
-        status_warna = "green" if node['Rx'] >= st.session_state.ap_params['l_rx'] else "red"
+        status_warna = "green" if node['Rx'] >= st.session_state.ap_params.get('l_rx', -25) else "red"
         st.markdown(f"""
-        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #6c757d;">
-            <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak: {node['Jarak']} km)</span><br>
+        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #6c757d; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak Akumulasi: {node['Jarak']} km)</span><br>
             <span style="font-size: 14px;">Spliter: {node['Rasio']}</span><br>
-            <span style="color:{status_warna}; font-weight:bold; font-size: 14px;">Rx: {node['Rx']:+.2f} dBm</span>
+            <span style="color:{status_warna}; font-weight:bold; font-size: 15px;">Rx ONT: {node['Rx']:+.2f} dBm</span>
         </div>
         """, unsafe_allow_html=True)
 
