@@ -34,8 +34,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+import streamlit as st
+
+# ... (Bagian Konfigurasi & CSS tetap sama) ...
+
 # ---------------------------------------------------------
-# 3. DATABASE KONSTANTA REDAMAN (Sesuai Tabel)
+# 3. DATABASE KONSTANTA REDAMAN (DIPERBARUI)
 # ---------------------------------------------------------
 LOSS_RASIO = {
     "01:99": [20.20, 0.24], "02:98": [17.19, 0.29], "03:97": [15.43, 0.33],
@@ -48,137 +52,94 @@ LOSS_RASIO = {
     "50:50": [3.21, 3.21]
 }
 
+LOSS_PLC = {
+    "1:2": 3.25, "1:4": 7.00, "1:8": 10.00, 
+    "1:16": 13.50, "1:32": 17.00, "1:64": 20.00
+}
+
 LOSS_KABEL_PER_KM = 0.3
 LOSS_KONEKTOR = 0.3
 LOSS_SPLICING = 0.03
 
 # ---------------------------------------------------------
-# 4. STATE MANAGEMENT
-# ---------------------------------------------------------
-if 'page' not in st.session_state:
-    st.session_state.page = 'Dashboard'
-
-def change_page(page_name):
-    st.session_state.page = page_name
-
-# ---------------------------------------------------------
-# 5. HALAMAN: DASHBOARD (UI LEBIH RAPI & TERSTRUKTUR)
-# ---------------------------------------------------------
-def show_dashboard():
-    st.title("🌐 FTTH Planner")
-    st.markdown("Halo, **Engineer!**\nMari rencanakan jaringan hari ini.")
-    st.write("---")
-    
-    # KARTU 1: KALKULATOR RASIO
-    st.markdown("### 📡 Kalkulator Rasio")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss redaman instan di 1 titik ODP dengan output akurat.</p>", unsafe_allow_html=True)
-    if st.button("Buka Kalkulator", key="btn_kalkulator", use_container_width=True, type="primary"):
-        change_page('Kalkulator')
-        st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # KARTU 2: AUTO PLANNER
-    st.markdown("### 🔗 Auto Planner (Linear)")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Otomatisasi draf topologi ODP berantai lurus dari OLT ke tiang akhir.</p>", unsafe_allow_html=True)
-    if st.button("Buka Auto Planner", key="btn_auto", use_container_width=True, type="primary"):
-        change_page('AutoPlanner')
-        st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # KARTU 3: ADVANCE PLANNER
-    st.markdown("### 🖧 Advance Planner")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks dan sisip sistem ODC.</p>", unsafe_allow_html=True)
-    if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"):
-        change_page('AdvancePlanner')
-        st.rerun()
-    st.markdown("<hr>", unsafe_allow_html=True)
-    
-    # BAGIAN PROYEK TERAKHIR (KOSONG / EMPTY STATE)
-    st.markdown("### 📁 Proyek Terakhir")
-    # Menggunakan kotak peringatan (info) sederhana sebagai indikator kosong
-    st.info("Belum ada proyek yang disimpan. Data hasil *export* atau draf Anda akan muncul di sini nanti.")
-
-# ---------------------------------------------------------
-# 6. HALAMAN: KALKULATOR RASIO (DARI SKRIP SEBELUMNYA)
+# 6. HALAMAN: KALKULATOR RASIO (REVISI)
 # ---------------------------------------------------------
 def show_kalkulator():
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("⬅", help="Kembali ke Dashboard"):
-            change_page('Dashboard')
+            st.session_state.page = 'Dashboard'
             st.rerun()
     with col2:
-        st.subheader("📡 Kalkulator Rasio")
+        st.subheader("📡 Kalkulator Redaman")
     
     st.write("---")
 
+    # --- INPUT PARAMETER UTAMA ---
     st.markdown("**Parameter Utama**")
     power_in = st.number_input("Power Input (dBm)", value=7.00, step=0.50, format="%.2f")
-    rasio_pilihan = st.selectbox("Pilih Rasio Spliter", options=list(LOSS_RASIO.keys()), index=9)
     
+    # Menggabungkan opsi Rasio dan PLC dalam satu list untuk pilihan
+    opsi_splitter = list(LOSS_RASIO.keys()) + ["--- PLC Splitter ---"] + list(LOSS_PLC.keys())
+    pilihan = st.selectbox("Pilih Jenis Splitter", options=opsi_splitter, index=9)
+    
+    # Validasi jika user memilih separator "--- PLC Splitter ---"
+    if pilihan == "--- PLC Splitter ---":
+        st.warning("Silakan pilih rasio atau tipe PLC yang valid.")
+        return
+
+    # --- INPUT PARAMETER JALUR ---
     with st.expander("Redaman Jalur / Kabel (Opsional)"):
         jarak_km = st.number_input("Jarak Kabel (km)", value=0.0, step=0.1, format="%.2f")
         jml_konektor = st.number_input("Jumlah Konektor/Barel", value=0, step=1)
         jml_splicing = st.number_input("Jumlah Splicing", value=0, step=1)
     
+    # Kalkulasi Redaman Kabel/Konektor
     loss_jalur = (jarak_km * LOSS_KABEL_PER_KM) + (jml_konektor * LOSS_KONEKTOR) + (jml_splicing * LOSS_SPLICING)
     power_sebelum_split = power_in - loss_jalur
-    
-    loss_kecil = LOSS_RASIO[rasio_pilihan][0]
-    loss_besar = LOSS_RASIO[rasio_pilihan][1]
-    
-    out_kaki_kecil = power_sebelum_split - loss_kecil
-    out_kaki_besar = power_sebelum_split - loss_besar
 
     st.write("---")
-    st.markdown("### Hasil Redaman")
-    
-    persen_kecil = rasio_pilihan.split(":")[0]
-    persen_besar = rasio_pilihan.split(":")[1]
+    st.markdown("### Hasil Output")
 
-    # Style untuk kotak hasil diletakkan inline
-    style_kecil = "background-color: #E74C3C; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;"
-    style_besar = "background-color: #3498DB; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;"
+    # --- LOGIKA TAMPILAN HASIL ---
+    if pilihan in LOSS_RASIO:
+        # Jika yang dipilih adalah Rasio (2 Output Berbeda)
+        loss_kecil = LOSS_RASIO[pilihan][0]
+        loss_besar = LOSS_RASIO[pilihan][1]
+        
+        out_kecil = power_sebelum_split - loss_kecil
+        out_besar = power_sebelum_split - loss_besar
 
-    res_col1, res_col2 = st.columns(2)
-    
-    with res_col1:
+        res_col1, res_col2 = st.columns(2)
+        with res_col1:
+            st.markdown(f"""
+            <div style="background-color: #E74C3C; color: white; padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 14px;">Kaki Kecil ({pilihan.split(':')[0]}%)</div>
+                <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_kecil:+.2f} dBm</div>
+                <div style="font-size: 12px; opacity: 0.9;">Loss: {loss_kecil} dB</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with res_col2:
+            st.markdown(f"""
+            <div style="background-color: #3498DB; color: white; padding: 15px; border-radius: 8px; text-align: center;">
+                <div style="font-size: 14px;">Kaki Besar ({pilihan.split(':')[1]}%)</div>
+                <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_besar:+.2f} dBm</div>
+                <div style="font-size: 12px; opacity: 0.9;">Loss: {loss_besar} dB</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    elif pilihan in LOSS_PLC:
+        # Jika yang dipilih adalah PLC (Semua Output Sama)
+        loss_plc = LOSS_PLC[pilihan]
+        out_plc = power_sebelum_split - loss_plc
+
         st.markdown(f"""
-        <div style="{style_kecil}">
-            <div>Kaki Kecil ({persen_kecil}%)</div>
-            <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_kaki_kecil:+.2f} dBm</div>
-            <div style="font-size: 12px; opacity: 0.9;">Loss Rasio: {loss_kecil} dB</div>
+        <div style="background-color: #2ECC71; color: white; padding: 20px; border-radius: 8px; text-align: center;">
+            <div style="font-size: 16px;">Output Semua Port ({pilihan})</div>
+            <div style="font-size: 32px; font-weight: bold; margin: 10px 0;">{out_plc:+.2f} dBm</div>
+            <div style="font-size: 14px; opacity: 0.9;">Loss PLC: {loss_plc} dB</div>
         </div>
         """, unsafe_allow_html=True)
-        
-    with res_col2:
-        st.markdown(f"""
-        <div style="{style_besar}">
-            <div>Kaki Besar ({persen_besar}%)</div>
-            <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_kaki_besar:+.2f} dBm</div>
-            <div style="font-size: 12px; opacity: 0.9;">Loss Rasio: {loss_besar} dB</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+
     if loss_jalur > 0:
-        st.caption(f"*Catatan: Hasil di atas sudah dikurangi Loss Jalur sebesar **{loss_jalur:.2f} dB**.*")
-
-# ---------------------------------------------------------
-# ROUTER HALAMAN
-# ---------------------------------------------------------
-if st.session_state.page == 'Dashboard':
-    show_dashboard()
-elif st.session_state.page == 'Kalkulator':
-    show_kalkulator()
-elif st.session_state.page == 'AutoPlanner':
-    st.title("🔗 Auto Planner")
-    st.write("*(Fitur 2 sedang dalam pengembangan...)*")
-    if st.button("⬅ Kembali ke Dashboard"):
-        change_page('Dashboard')
-        st.rerun()
-elif st.session_state.page == 'AdvancePlanner':
-    st.title("🖧 Advance Planner")
-    st.write("*(Fitur 3 sedang dalam pengembangan...)*")
-    if st.button("⬅ Kembali ke Dashboard"):
-        change_page('Dashboard')
-        st.rerun()
+        st.caption(f"*Hasil sudah termasuk akumulasi loss jalur sebesar {loss_jalur:.2f} dB.")
