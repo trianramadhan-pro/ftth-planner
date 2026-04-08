@@ -3,7 +3,7 @@ import pandas as pd
 import io
 
 # ---------------------------------------------------------
-# 1. KONFIGURASI HALAMAN
+# 1. KONFIGURASI HALAMAN (MOBILE-FIRST)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="FTTH Planner",
@@ -13,15 +13,18 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. INJEKSI CUSTOM CSS
+# 2. INJEKSI CUSTOM CSS UNTUK UI BERSIH
 # ---------------------------------------------------------
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    
+    /* Tombol Utama */
     div.stButton > button { border-radius: 8px; font-weight: 600; padding: 10px 0; }
     hr { margin: 15px 0 25px 0 !important; border-color: #eeeeee; }
     
+    /* Auto Planner Timeline */
     .timeline-node {
         border-left: 4px solid #007BFF;
         padding-left: 15px;
@@ -30,26 +33,26 @@ st.markdown("""
     }
     .timeline-node::before {
         content: '';
-        position: absolute; width: 14px; height: 14px;
-        background: #007BFF; border-radius: 50%;
+        position: absolute;
+        width: 14px; height: 14px;
+        background: #007BFF;
+        border-radius: 50%;
         left: -9px; top: 0;
     }
     .timeline-node.terminasi { border-left-color: #28A745; }
     .timeline-node.terminasi::before { background: #28A745; }
 
+    /* Box Hasil Rx Auto Planner (Kontras Hitam) */
     .rx-box {
-        padding: 4px 10px; border-radius: 5px; font-weight: bold;
-        color: #000000 !important; display: inline-block; margin-top: 4px;
+        padding: 4px 10px;
+        border-radius: 5px;
+        font-weight: bold;
+        color: #000000 !important; 
+        display: inline-block;
+        margin-top: 4px;
     }
     .rx-aman { background-color: #2ECC71; }
     .rx-bahaya { background-color: #E74C3C; }
-    
-    /* CSS Khusus Advance Planner Node Card */
-    .adv-node-card {
-        background-color: #f8f9fa; border: 1px solid #e9ecef;
-        border-radius: 8px; padding: 15px; margin-bottom: 10px;
-        border-left: 5px solid #6c757d;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -82,9 +85,11 @@ LOSS_SPLICING = 0.03
 if 'page' not in st.session_state: 
     st.session_state.page = 'Dashboard'
 if 'draf_topologi' not in st.session_state: 
-    st.session_state.draf_topologi = [] # Untuk menyimpan hasil Auto Planner
+    st.session_state.draf_topologi = []
 if 'global_params' not in st.session_state:
-    st.session_state.global_params = {} # Menyimpan power awal dll
+    st.session_state.global_params = {}
+if 'saved_projects' not in st.session_state:
+    st.session_state.saved_projects = [] # Array untuk menyimpan banyak proyek
 
 def change_page(page_name): 
     st.session_state.page = page_name
@@ -98,28 +103,36 @@ def show_dashboard():
     st.write("---")
     
     st.markdown("### 📡 Kalkulator Redaman")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan di 1 titik ODP.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Hitung loss instan untuk Spliter Rasio maupun PLC di 1 titik ODP.</p>", unsafe_allow_html=True)
     if st.button("Buka Kalkulator", key="btn_kalkulator", use_container_width=True, type="primary"): 
         change_page('Kalkulator'); st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🔗 Auto Planner (Linear)")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Draf topologi ODP berantai otomatis.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Otomatisasi draf topologi ODP berantai lurus dari OLT ke tiang akhir.</p>", unsafe_allow_html=True)
     if st.button("Buka Auto Planner", key="btn_auto", use_container_width=True, type="primary"): 
         change_page('AutoPlanner'); st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("### 🖧 Advance Planner")
-    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Modifikasi topologi kompleks (ODC/Cabang).</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: gray; font-size: 14px; margin-top: -10px;'>Kanvas interaktif untuk modifikasi topologi kompleks (Segera Hadir).</p>", unsafe_allow_html=True)
     if st.button("Buka Advance Planner", key="btn_advance", use_container_width=True, type="primary"): 
         change_page('AdvancePlanner'); st.rerun()
     st.markdown("<hr>", unsafe_allow_html=True)
     
+    # Render Daftar Proyek Tersimpan
     st.markdown("### 📁 Proyek Terakhir")
-    if len(st.session_state.draf_topologi) > 0:
-        st.success(f"Terdapat draf aktif dengan {len(st.session_state.draf_topologi)} node. Lanjutkan di Advance Planner.")
+    if len(st.session_state.saved_projects) > 0:
+        # Menampilkan dari yang terbaru (reverse)
+        for proj in reversed(st.session_state.saved_projects):
+            st.markdown(f"""
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #28A745; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <strong style="font-size:16px;">{proj['nama']}</strong><br>
+                <span style="font-size: 13px; color: gray;">Total {proj['nodes']} ODP | Power OLT: {proj['power']} dBm</span>
+            </div>
+            """, unsafe_allow_html=True)
     else:
-        st.info("Belum ada proyek yang disimpan.")
+        st.info("Belum ada proyek yang disimpan. Gunakan Auto Planner untuk membuat proyek baru.")
 
 # ---------------------------------------------------------
 # 6. HALAMAN: KALKULATOR REDAMAN
@@ -127,54 +140,95 @@ def show_dashboard():
 def show_kalkulator():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
-    with col2: st.subheader("📡 Kalkulator Redaman")
+        if st.button("⬅", help="Kembali"): change_page('Dashboard'); st.rerun()
+    with col2:
+        st.subheader("📡 Kalkulator Redaman")
     st.write("---")
 
-    with st.expander("📊 Lihat Tabel Referensi"):
+    with st.expander("📊 Lihat Tabel Referensi Redaman"):
         tb1, tb2 = st.columns(2)
-        with tb1: st.dataframe(pd.DataFrame([{"Rasio": k, "Drop": v[0], "Pass": v[1]} for k, v in LOSS_RASIO.items()]), hide_index=True)
-        with tb2: st.dataframe(pd.DataFrame([{"PLC": k, "Loss": v} for k, v in LOSS_PLC.items()]), hide_index=True)
+        with tb1:
+            st.markdown("**Spliter Rasio**")
+            df_r = pd.DataFrame([{"Rasio": k, "Drop": v[0], "Pass": v[1]} for k, v in LOSS_RASIO.items()])
+            st.dataframe(df_r, hide_index=True, use_container_width=True)
+        with tb2:
+            st.markdown("**Spliter PLC**")
+            df_p = pd.DataFrame([{"PLC": k, "Loss (dB)": v} for k, v in LOSS_PLC.items()])
+            st.dataframe(df_p, hide_index=True, use_container_width=True)
+            st.markdown("**Lainnya:**")
+            st.write(f"• Kabel: {LOSS_KABEL_PER_KM} dB/km<br>• Konektor: {LOSS_KONEKTOR} dB", unsafe_allow_html=True)
 
+    st.markdown("**Parameter Utama**")
     power_in = st.number_input("Power Input (dBm)", value=7.00, step=0.50, format="%.2f")
     opsi_splitter = list(LOSS_RASIO.keys()) + ["--- PLC Splitter ---"] + list(LOSS_PLC.keys())
     pilihan = st.selectbox("Pilih Jenis Splitter", options=opsi_splitter, index=9)
-    if pilihan == "--- PLC Splitter ---": return
+    
+    if pilihan == "--- PLC Splitter ---": 
+        return
 
     with st.expander("Redaman Jalur / Kabel (Opsional)"):
-        jarak_km = st.number_input("Jarak Kabel (km)", value=0.0, step=0.1)
-        jml_konektor = st.number_input("Konektor/Barel", value=0, step=1)
-        jml_splicing = st.number_input("Splicing", value=0, step=1)
+        jarak_km = st.number_input("Jarak Kabel (km)", value=0.0, step=0.1, format="%.2f")
+        jml_konektor = st.number_input("Jumlah Konektor/Barel", value=0, step=1)
+        jml_splicing = st.number_input("Jumlah Splicing", value=0, step=1)
     
     loss_jalur = (jarak_km * LOSS_KABEL_PER_KM) + (jml_konektor * LOSS_KONEKTOR) + (jml_splicing * LOSS_SPLICING)
     power_sebelum_split = power_in - loss_jalur
+
     st.write("---")
+    st.markdown("### Hasil Output")
 
     if pilihan in LOSS_RASIO:
-        lk, lb = LOSS_RASIO[pilihan][0], LOSS_RASIO[pilihan][1]
-        ok, ob = power_sebelum_split - lk, power_sebelum_split - lb
-        c1, c2 = st.columns(2)
-        with c1: st.markdown(f'<div style="background:#E74C3C;color:white;padding:10px;border-radius:8px;text-align:center;"><small>Kaki Kecil ({pilihan.split(":")[0]}%)</small><br><b>{ok:+.2f} dBm</b><br><small>Loss: {lk}</small></div>', unsafe_allow_html=True)
-        with c2: st.markdown(f'<div style="background:#3498DB;color:white;padding:10px;border-radius:8px;text-align:center;"><small>Kaki Besar ({pilihan.split(":")[1]}%)</small><br><b>{ob:+.2f} dBm</b><br><small>Loss: {lb}</small></div>', unsafe_allow_html=True)
+        loss_kecil = LOSS_RASIO[pilihan][0]
+        loss_besar = LOSS_RASIO[pilihan][1]
+        out_kecil = power_sebelum_split - loss_kecil
+        out_besar = power_sebelum_split - loss_besar
+
+        res_col1, res_col2 = st.columns(2)
+        with res_col1:
+            st.markdown(f"""
+            <div style="background-color: #E74C3C; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px;">
+                <div style="font-size: 13px;">Kaki Kecil ({pilihan.split(':')[0]}%)</div>
+                <div style="font-size: 18px; font-weight: bold; margin: 5px 0;">{out_kecil:+.2f} dBm</div>
+                <div style="font-size: 11px; opacity: 0.9;">Loss: {loss_kecil} dB</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with res_col2:
+            st.markdown(f"""
+            <div style="background-color: #3498DB; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px;">
+                <div style="font-size: 13px;">Kaki Besar ({pilihan.split(':')[1]}%)</div>
+                <div style="font-size: 18px; font-weight: bold; margin: 5px 0;">{out_besar:+.2f} dBm</div>
+                <div style="font-size: 11px; opacity: 0.9;">Loss: {loss_besar} dB</div>
+            </div>
+            """, unsafe_allow_html=True)
+
     elif pilihan in LOSS_PLC:
-        l_plc = LOSS_PLC[pilihan]
-        st.markdown(f'<div style="background:#2ECC71;color:white;padding:15px;border-radius:8px;text-align:center;">Output ({pilihan})<br><b style="font-size:22px;">{(power_sebelum_split - l_plc):+.2f} dBm</b></div>', unsafe_allow_html=True)
+        loss_plc = LOSS_PLC[pilihan]
+        out_plc = power_sebelum_split - loss_plc
+        st.markdown(f"""
+        <div style="background-color: #2ECC71; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 5px;">
+            <div style="font-size: 14px;">Output Semua Port ({pilihan})</div>
+            <div style="font-size: 22px; font-weight: bold; margin: 5px 0;">{out_plc:+.2f} dBm</div>
+            <div style="font-size: 12px; opacity: 0.9;">Loss PLC: {loss_plc} dB</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 7. HALAMAN: AUTO PLANNER
+# 7. HALAMAN: AUTO PLANNER (Dengan Fitur Save Project)
 # ---------------------------------------------------------
 def to_excel(df):
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
     return output.getvalue()
 
 def show_autoplanner():
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("⬅"): change_page('Dashboard'); st.rerun()
-    with col2: st.subheader("🔗 Auto Planner")
+        if st.button("⬅", help="Kembali"): change_page('Dashboard'); st.rerun()
+    with col2:
+        st.subheader("🔗 Auto Planner")
     
-    with st.expander("⚙️ Parameter", expanded=True):
+    with st.expander("⚙️ Parameter Jaringan", expanded=True):
         p_in = st.number_input("Power OLT (dBm)", value=7.00, step=0.50)
         l_rx = st.number_input("Limit Rx (dBm)", value=-25.00, step=0.50)
         dist = st.number_input("Jarak Antar ODP (km)", value=0.10, step=0.05)
@@ -193,6 +247,7 @@ def show_autoplanner():
         while True:
             total_d += dist
             p_tiang = curr_p - (dist * LOSS_KABEL_PER_KM) - l_extra
+            
             best_r = None
             for r, loss in LOSS_RASIO.items():
                 drop_kecil = p_tiang - loss[0]
@@ -203,50 +258,83 @@ def show_autoplanner():
             
             if best_r:
                 topologi.append({
-                    "id": idx, "Node": f"ODP {idx}", "Tipe": "Rasio", "Rasio": best_r, 
-                    "Drop_Kecil": round(drop_f,2), "Jarak_Tiang": dist, "Jarak_Total": round(total_d,2), 
-                    "PLC": plc_type, "Konektor": conn, "Rx": round(rx_f,2), "Next": round(p_next,2)
+                    "Node": f"ODP {idx}", "Tipe": "Rasio", "Rasio": best_r, 
+                    "Drop_Kecil": round(drop_f,2), "Jarak": round(total_d,2), 
+                    "Rx": round(rx_f,2), "Next": round(p_next,2)
                 })
                 curr_p, idx = p_next, idx + 1
             else:
                 rx_t = p_tiang - l_plc
                 if rx_t >= l_rx:
                     topologi.append({
-                        "id": idx, "Node": f"ODP {idx}", "Tipe": "Terminasi", "Rasio": "Direct PLC", 
-                        "Drop_Kecil": round(p_tiang,2), "Jarak_Tiang": dist, "Jarak_Total": round(total_d,2), 
-                        "PLC": plc_type, "Konektor": conn, "Rx": round(rx_t,2), "Next": None
+                        "Node": f"ODP {idx}", "Tipe": "Terminasi", "Rasio": "Direct PLC", 
+                        "Drop_Kecil": round(p_tiang,2), "Jarak": round(total_d,2), 
+                        "Rx": round(rx_t,2), "Next": None
                     })
                 break
 
         if not topologi:
-            st.error("Gagal generate. Coba ubah parameter.")
+            st.error("Power tidak cukup untuk ditarik ke ODP pertama. Coba naikkan Power OLT atau turunkan limit Rx.")
         else:
-            # 1. SIMPAN KE STATE UNTUK ADVANCE PLANNER
+            st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
+            
+            # --- SIMPAN DRAF KE SESSION STATE ---
             st.session_state.draf_topologi = topologi
             st.session_state.global_params = {"p_in": p_in, "l_rx": l_rx, "l_plc": l_plc}
 
-            st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
+            # --- MANAJEMEN TOMBOL (EXPORT, SIMPAN, EDIT) ---
+            st.markdown("**Simpan / Ekspor Hasil:**")
+            nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar (Arah Utara)")
             
-            df_export = pd.DataFrame(topologi)[["Node", "Tipe", "Rasio", "Drop_Kecil", "Jarak_Total", "Rx"]]
-            st.download_button("📊 Export Excel", data=to_excel(df_export), file_name="ftth_plan.xlsx", use_container_width=True)
-            
-            # 2. TOMBOL PINDAH KE ADVANCE PLANNER
-            st.write("")
-            if st.button("✏️ Edit Draf ini di Advance Planner", use_container_width=True):
+            # Baris 1: Export dan Simpan berdampingan
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                df_export = pd.DataFrame(topologi).rename(columns={'Drop_Kecil': 'Input PLC (dBm)'})
+                st.download_button("📊 Export Excel", data=to_excel(df_export), file_name="ftth_plan.xlsx", use_container_width=True)
+            with btn_col2:
+                if st.button("💾 Simpan Proyek", use_container_width=True):
+                    if nama_proyek.strip() == "":
+                        st.warning("⚠️ Nama proyek tidak boleh kosong!")
+                    else:
+                        st.session_state.saved_projects.append({
+                            "nama": nama_proyek,
+                            "nodes": len(topologi),
+                            "power": p_in,
+                            "data": topologi
+                        })
+                        st.success(f"Proyek '{nama_proyek}' disimpan ke Dashboard!")
+
+            # Baris 2: Tombol Edit Advance Planner
+            if st.button("✏️ Edit di Advance Planner", use_container_width=True, type="primary"):
                 change_page('AdvancePlanner')
                 st.rerun()
+
             st.write("---")
             
+            # --- RENDER TIMELINE HASIL ---
             for d in topologi:
                 is_t = d['Tipe'] == "Terminasi"
                 cls = "timeline-node terminasi" if is_t else "timeline-node"
                 rx_cls = "rx-aman" if d['Rx'] >= l_rx else "rx-bahaya"
-                info_r = f'🏁 <b style="color:#28A745;">TERMINASI</b><br>' if is_t else f'Rasio: <b>{d["Rasio"]}</b><br>'
-                info_k = f'<span style="font-size:13px;color:gray;">Out Kaki Kecil: {d["Drop_Kecil"]:+.2f} dBm</span><br>'
-                st.markdown(f'<div class="{cls}"><b>{d["Node"]}</b> ({d["Jarak_Total"]} km)<br>{info_r}{info_k}<div class="rx-box {rx_cls}">Rx ONT: {d["Rx"]:+.2f} dBm</div></div>', unsafe_allow_html=True)
+                
+                info_rasio = f'🏁 <b style="color:#28A745;">TERMINASI JALUR</b><br>' if is_t else f'Rasio: <b>{d["Rasio"]}</b><br>'
+                info_kaki_kecil = f'<span style="font-size: 13px; color: gray;">Out Kaki Kecil: {d["Drop_Kecil"]:+.2f} dBm</span><br>'
+                
+                # MEMASTIKAN POWER LANJUT TAMPIL DENGAN JELAS
+                info_lanjut = f'<br><span style="color:#007BFF; font-weight:bold; font-size:14px;">⚡ Power Lanjut: {d["Next"]:+.2f} dBm</span>' if not is_t else ''
+
+                st.markdown(f"""
+                <div class="{cls}">
+                    <b>{d['Node']}</b> ({d['Jarak']} km)<br>
+                    {info_rasio}
+                    {info_kaki_kecil}
+                    <div class="rx-box {rx_cls}">Rx ONT: {d['Rx']:+.2f} dBm</div>
+                    {info_lanjut}
+                </div>
+                """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 8. HALAMAN: ADVANCE PLANNER (PROGRES TAHAP 1)
+# 8. HALAMAN: ADVANCE PLANNER (PROGRES)
 # ---------------------------------------------------------
 def show_advance():
     col1, col2 = st.columns([1, 4])
@@ -255,44 +343,24 @@ def show_advance():
     with col2: st.subheader("🖧 Advance Planner")
     st.write("---")
     
-    # Cek apakah ada data di memori
     draf = st.session_state.draf_topologi
     if not draf:
-        st.warning("Belum ada draf topologi.")
-        st.info("Silakan buat draf otomatis di menu **Auto Planner** terlebih dahulu, lalu klik 'Edit di Advance Planner'.")
+        st.info("Buat draf otomatis di menu **Auto Planner** terlebih dahulu, lalu klik 'Edit di Advance Planner'.")
         return
 
-    # Tampilkan Header Info
     p_in = st.session_state.global_params.get("p_in", 0)
-    st.markdown(f"**Sumber OLT / Backbone:** `{p_in:+.2f} dBm`")
-    st.markdown("Berikut adalah rantai *node* jaringan Anda. Klik **Edit** untuk mengubah rasio/PLC pada tiang tertentu.")
-    st.write("")
-
-    # Loop menampilkan Node sebagai Kartu Interaktif
+    st.markdown(f"**Sumber OLT:** `{p_in:+.2f} dBm`")
+    st.write("Daftar Node (Mode Edit sedang dibangun):")
+    
     for i, node in enumerate(draf):
-        is_t = node['Tipe'] == "Terminasi"
         status_warna = "green" if node['Rx'] >= st.session_state.global_params.get("l_rx", -25) else "red"
-        
         st.markdown(f"""
-        <div class="adv-node-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak: {node['Jarak_Total']} km)</span><br>
-                    <span style="font-size: 14px;">Spliter: {node['Rasio']} + {node['PLC']}</span><br>
-                    <span style="color:{status_warna}; font-weight:bold; font-size: 14px;">Rx: {node['Rx']:+.2f} dBm</span>
-                </div>
-            </div>
+        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #6c757d;">
+            <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak: {node['Jarak']} km)</span><br>
+            <span style="font-size: 14px;">Spliter: {node['Rasio']}</span><br>
+            <span style="color:{status_warna}; font-weight:bold; font-size: 14px;">Rx: {node['Rx']:+.2f} dBm</span>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Tombol aksi diletakkan menggunakan kolom asli Streamlit agar bisa diklik
-        col_act1, col_act2, col_act3 = st.columns([2, 2, 4])
-        with col_act1:
-            if st.button("✏️ Edit", key=f"edit_{i}", use_container_width=True):
-                st.toast(f"Fitur edit untuk {node['Node']} sedang dibangun.")
-        with col_act2:
-            if st.button("➕ ODC", key=f"add_{i}", use_container_width=True, help="Sisipkan ODC sebelum tiang ini"):
-                st.toast("Fitur sisip ODC sedang dibangun.")
 
 # ---------------------------------------------------------
 # ROUTER
