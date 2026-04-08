@@ -34,10 +34,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-import streamlit as st
-
-# ... (Bagian Konfigurasi & CSS tetap sama) ...
-
 # ---------------------------------------------------------
 # 3. DATABASE KONSTANTA REDAMAN (DIPERBARUI)
 # ---------------------------------------------------------
