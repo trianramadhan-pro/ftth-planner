@@ -3,6 +3,17 @@ import pandas as pd
 import io
 from datetime import datetime
 
+# =========================================================
+# VARIABEL SISTEM & CHANGELOG (PEMBARUAN)
+# =========================================================
+APP_VERSION = "v1.3.0"
+CHANGELOG = """
+**Catatan Rilis & Perbaikan (v1.3.0):**
+- 🐛 **Fix:** Mencegah tombol Edit & Hapus menumpuk dan membesar di layar HP (Injeksi CSS Flexbox Force-Row).
+- ✨ **New:** Penambahan sistem versi dan log pembaruan di Dashboard yang bisa di-expand.
+- 🔧 **Update:** Routing memori disempurnakan. Membuka proyek dari Dashboard kini otomatis menarik seluruh parameter input ke kalkulator Auto Planner.
+"""
+
 # ---------------------------------------------------------
 # 1. KONFIGURASI HALAMAN
 # ---------------------------------------------------------
@@ -21,9 +32,11 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
+    /* Tombol Utama Menu */
     div.stButton > button { border-radius: 8px; font-weight: 600; padding: 10px 0; }
     hr { margin: 15px 0 25px 0 !important; border-color: #eeeeee; }
     
+    /* Auto Planner Timeline */
     .timeline-node {
         border-left: 4px solid #007BFF; padding-left: 15px;
         margin-bottom: 25px; position: relative;
@@ -41,6 +54,39 @@ st.markdown("""
     }
     .rx-aman { background-color: #2ECC71; }
     .rx-bahaya { background-color: #E74C3C; }
+    
+    /* =====================================================
+       CSS HACK: Memaksa Tombol Proyek Tersimpan Sejajar & Kecil
+       Mencegah perilaku bawaan Streamlit yang menumpuk kolom di HP
+       ===================================================== */
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-end !important; /* Mendorong tombol ke kanan */
+        gap: 8px !important;
+        margin-top: -10px; /* Menarik tombol sedikit ke atas */
+    }
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stHorizontalBlock"] [data-testid="column"] {
+        min-width: max-content !important;
+        width: auto !important;
+        flex: 0 1 auto !important;
+    }
+    /* Memperkecil ukuran tombol di dalam kartu proyek */
+    [data-testid="stVerticalBlockBorderWrapper"] div.stButton > button {
+        padding: 4px 12px !important;
+        font-size: 13px !important;
+        font-weight: normal !important;
+        height: auto !important;
+        min-height: 0 !important;
+        width: auto !important;
+        border: 1px solid #ced4da !important;
+        background-color: transparent !important;
+        color: #495057 !important;
+    }
+    [data-testid="stVerticalBlockBorderWrapper"] div.stButton > button:hover {
+        background-color: #f8f9fa !important;
+        border-color: #6c757d !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -57,12 +103,7 @@ LOSS_RASIO = {
     "35:65": [4.76, 2.07],  "40:60": [4.18, 2.42],  "45:55": [3.67, 2.80],
     "50:50": [3.21, 3.21]
 }
-
-LOSS_PLC = {
-    "1:2": 3.25, "1:4": 7.00, "1:8": 10.00, 
-    "1:16": 13.50, "1:32": 17.00, "1:64": 20.00
-}
-
+LOSS_PLC = {"1:2": 3.25, "1:4": 7.00, "1:8": 10.00, "1:16": 13.50, "1:32": 17.00, "1:64": 20.00}
 LOSS_KABEL_PER_KM = 0.3
 LOSS_KONEKTOR = 0.3
 LOSS_SPLICING = 0.03
@@ -89,6 +130,11 @@ def go_dashboard_and_reset():
 # ---------------------------------------------------------
 def show_dashboard():
     st.title("🌐 FTTH Planner")
+    
+    # KETERANGAN VERSI (BISA DIBUKA TUTUP)
+    with st.expander(f"🛠️ Info Sistem & Changelog ({APP_VERSION})"):
+        st.markdown(CHANGELOG)
+
     st.markdown("Halo, **Engineer!**\nMari rencanakan jaringan hari ini.")
     st.write("---")
     
@@ -118,33 +164,34 @@ def show_dashboard():
         for i, proj in enumerate(reversed(st.session_state.saved_projects)):
             real_index = len(st.session_state.saved_projects) - 1 - i
             
-            # Container border untuk membuat kartu
             with st.container(border=True):
-                # Kolom rasio 8:1:1 membuat tombol terpojok ke kanan dan berukuran kecil
-                col_text, col_edit, col_del = st.columns([8, 1.5, 1.5])
+                # Teks Informasi Proyek
+                st.markdown(f"""
+                <div style="margin-bottom: 5px;">
+                    <strong style="font-size:16px; color:#ddd;">{proj['nama']}</strong> 
+                    <span style="font-size:10px; background:#4CAF50; color:white; padding:2px 6px; border-radius:4px; margin-left:5px;">{proj['tipe']}</span><br>
+                    <span style="font-size: 11px; color: gray;">🕒 {proj['date']} | ⚡ {proj['power']} dBm | 📍 {proj['nodes']} ODP</span><br>
+                    <span style="font-size: 12px; color: #aaa;"><i>{proj['summary']}</i></span>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                with col_text:
-                    st.markdown(f"**{proj['nama']}** <span style='font-size:11px; background:#e9ecef; padding:2px 6px; border-radius:4px; color:#555;'>{proj['tipe']}</span>", unsafe_allow_html=True)
-                    st.caption(f"🕒 {proj['date']} | ⚡ {proj['power']} dBm | 📍 {proj['nodes']} ODP")
-                    st.markdown(f"<span style='font-size: 12px; color: gray;'>{proj['summary']}</span>", unsafe_allow_html=True)
-                
-                with col_edit:
-                    if st.button("✏️", key=f"edit_{real_index}", help="Buka Proyek", use_container_width=True):
-                        # Pemuatan data ke memori sementara
+                # Tombol Aksi (Dengan CSS Hack, ini akan menjadi ikon kecil di kanan)
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("✏️ Buka / Edit", key=f"edit_{real_index}"):
+                        # Muat data ke memori
                         st.session_state.ap_topologi = proj['data']
                         st.session_state.ap_params = proj['params']
                         st.session_state.ap_summary = proj['summary']
-                        
-                        # Cerdas me-Routing halaman sesuai tipe proyek
+                        # Buka halaman sesuai tipe
                         if proj['tipe'] == "Auto Planner":
                             st.session_state.ap_generated = True
                             st.session_state.page = 'AutoPlanner'
                         else:
                             st.session_state.page = 'AdvancePlanner'
                         st.rerun()
-                        
-                with col_del:
-                    if st.button("🗑️", key=f"del_{real_index}", help="Hapus Proyek", use_container_width=True):
+                with col_btn2:
+                    if st.button("🗑️ Hapus", key=f"del_{real_index}"):
                         st.session_state.saved_projects.pop(real_index)
                         st.rerun()
     else:
@@ -262,13 +309,12 @@ def show_autoplanner():
             st.error("Power tidak cukup untuk ditarik ke ODP pertama.")
             st.session_state.ap_generated = False
         else:
-            summary_parts = [f"{count} spliter {r}" for r, count in rasio_counts.items()]
-            if topologi[-1]['Tipe'] == 'Terminasi': summary_parts.append("1 terminasi direct")
-            summary_text = "Menggunakan: " + ", ".join(summary_parts) + f" ({plc_type})."
+            summary_parts = [f"{count}x ({r})" for r, count in rasio_counts.items()]
+            if topologi[-1]['Tipe'] == 'Terminasi': summary_parts.append("1x Terminasi")
+            summary_text = "Rasio: " + ", ".join(summary_parts) + f" | PLC {plc_type}."
 
             st.session_state.ap_topologi = topologi
             st.session_state.ap_summary = summary_text
-            # Simpan seluruh parameter konfigurasi agar bisa diload ulang sempurna
             st.session_state.ap_params = {
                 "p_in": p_in, "l_rx": l_rx, "dist": dist, 
                 "plc_type": plc_type, "conn": conn, "l_plc": l_plc
@@ -285,7 +331,7 @@ def show_autoplanner():
         st.caption(st.session_state.ap_summary)
         
         st.markdown("**Simpan / Ekspor Hasil:**")
-        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Distribusi Mawar", key="input_nama_proyek")
+        nama_proyek = st.text_input("Nama Proyek:", placeholder="Contoh: Jalur Mawar", key="input_nama_proyek")
         
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
@@ -308,7 +354,7 @@ def show_autoplanner():
                     })
                     st.success(f"Proyek disimpan! Cek menu Dashboard.")
 
-        if st.button("✏️ Edit di Advance Planner", use_container_width=True, type="primary"):
+        if st.button("✏️ Lanjut Edit di Advance Planner", use_container_width=True, type="primary"):
             st.session_state.page = 'AdvancePlanner'
             st.rerun()
 
@@ -356,7 +402,7 @@ def show_advance():
         status_warna = "green" if node['Rx'] >= st.session_state.ap_params.get('l_rx', -25) else "red"
         st.markdown(f"""
         <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 5px solid #6c757d; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak Akumulasi: {node['Jarak']} km)</span><br>
+            <strong>{node['Node']}</strong> <span style="color:gray; font-size:12px;">(Jarak: {node['Jarak']} km)</span><br>
             <span style="font-size: 14px;">Spliter: {node['Rasio']}</span><br>
             <span style="color:{status_warna}; font-weight:bold; font-size: 15px;">Rx ONT: {node['Rx']:+.2f} dBm</span>
         </div>
