@@ -44,12 +44,12 @@ st.markdown("""
 
     /* Box Hasil Rx Auto Planner (Kontras Hitam) */
     .rx-box {
-        padding: 5px 10px;
+        padding: 4px 10px;
         border-radius: 5px;
         font-weight: bold;
         color: #000000 !important; 
         display: inline-block;
-        margin-top: 5px;
+        margin-top: 4px;
     }
     .rx-aman { background-color: #2ECC71; }
     .rx-bahaya { background-color: #E74C3C; }
@@ -86,7 +86,7 @@ if 'page' not in st.session_state: st.session_state.page = 'Dashboard'
 def change_page(page_name): st.session_state.page = page_name
 
 # ---------------------------------------------------------
-# 5. HALAMAN: DASHBOARD (Dikembalikan seperti UI sebelumnya)
+# 5. HALAMAN: DASHBOARD
 # ---------------------------------------------------------
 def show_dashboard():
     st.title("🌐 FTTH Planner")
@@ -115,7 +115,7 @@ def show_dashboard():
     st.info("Belum ada proyek yang disimpan.")
 
 # ---------------------------------------------------------
-# 6. HALAMAN: KALKULATOR (Dikembalikan pakai Box Warna Elegan)
+# 6. HALAMAN: KALKULATOR REDAMAN (Dengan Tabel Referensi)
 # ---------------------------------------------------------
 def show_kalkulator():
     col1, col2 = st.columns([1, 4])
@@ -125,6 +125,24 @@ def show_kalkulator():
         st.subheader("📡 Kalkulator Redaman")
     st.write("---")
 
+    # --- TABEL REFERENSI (BISA DIBUKA TUTUP) ---
+    with st.expander("📊 Lihat Tabel Referensi Redaman"):
+        tb1, tb2 = st.columns(2)
+        with tb1:
+            st.markdown("**Spliter Rasio**")
+            # Membuat dataframe untuk tampilan tabel yang rapi
+            df_r = pd.DataFrame([{"Rasio": k, "Loss % Kecil": v[0], "Loss % Besar": v[1]} for k, v in LOSS_RASIO.items()])
+            st.dataframe(df_r, hide_index=True, use_container_width=True)
+        with tb2:
+            st.markdown("**Spliter PLC**")
+            df_p = pd.DataFrame([{"PLC": k, "Loss (dB)": v} for k, v in LOSS_PLC.items()])
+            st.dataframe(df_p, hide_index=True, use_container_width=True)
+            st.markdown("**Komponen Lain**")
+            st.write(f"• Kabel: **{LOSS_KABEL_PER_KM}** dB/km")
+            st.write(f"• Konektor: **{LOSS_KONEKTOR}** dB")
+            st.write(f"• Splicing: **{LOSS_SPLICING}** dB")
+
+    # --- INPUT PARAMETER ---
     st.markdown("**Parameter Utama**")
     power_in = st.number_input("Power Input (dBm)", value=7.00, step=0.50, format="%.2f")
     opsi_splitter = list(LOSS_RASIO.keys()) + ["--- PLC Splitter ---"] + list(LOSS_PLC.keys())
@@ -145,27 +163,29 @@ def show_kalkulator():
     st.write("---")
     st.markdown("### Hasil Output")
 
+    # --- TAMPILAN KOTAK KECIL BERDAMPINGAN ---
     if pilihan in LOSS_RASIO:
         loss_kecil = LOSS_RASIO[pilihan][0]
         loss_besar = LOSS_RASIO[pilihan][1]
         out_kecil = power_sebelum_split - loss_kecil
         out_besar = power_sebelum_split - loss_besar
 
+        # Menggunakan kolom agar berdampingan, padding dikecilkan, font size disesuaikan
         res_col1, res_col2 = st.columns(2)
         with res_col1:
             st.markdown(f"""
-            <div style="background-color: #E74C3C; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
-                <div style="font-size: 14px;">Kaki Kecil ({pilihan.split(':')[0]}%)</div>
-                <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_kecil:+.2f} dBm</div>
-                <div style="font-size: 12px; opacity: 0.9;">Loss: {loss_kecil} dB</div>
+            <div style="background-color: #E74C3C; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 13px;">Kaki Kecil ({pilihan.split(':')[0]}%)</div>
+                <div style="font-size: 18px; font-weight: bold; margin: 5px 0;">{out_kecil:+.2f} dBm</div>
+                <div style="font-size: 11px; opacity: 0.9;">Loss: {loss_kecil} dB</div>
             </div>
             """, unsafe_allow_html=True)
         with res_col2:
             st.markdown(f"""
-            <div style="background-color: #3498DB; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
-                <div style="font-size: 14px;">Kaki Besar ({pilihan.split(':')[1]}%)</div>
-                <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">{out_besar:+.2f} dBm</div>
-                <div style="font-size: 12px; opacity: 0.9;">Loss: {loss_besar} dB</div>
+            <div style="background-color: #3498DB; color: white; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 13px;">Kaki Besar ({pilihan.split(':')[1]}%)</div>
+                <div style="font-size: 18px; font-weight: bold; margin: 5px 0;">{out_besar:+.2f} dBm</div>
+                <div style="font-size: 11px; opacity: 0.9;">Loss: {loss_besar} dB</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -173,18 +193,18 @@ def show_kalkulator():
         loss_plc = LOSS_PLC[pilihan]
         out_plc = power_sebelum_split - loss_plc
         st.markdown(f"""
-        <div style="background-color: #2ECC71; color: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 10px;">
-            <div style="font-size: 16px;">Output Semua Port ({pilihan})</div>
-            <div style="font-size: 32px; font-weight: bold; margin: 10px 0;">{out_plc:+.2f} dBm</div>
-            <div style="font-size: 14px; opacity: 0.9;">Loss PLC: {loss_plc} dB</div>
+        <div style="background-color: #2ECC71; color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="font-size: 14px;">Output Semua Port ({pilihan})</div>
+            <div style="font-size: 22px; font-weight: bold; margin: 5px 0;">{out_plc:+.2f} dBm</div>
+            <div style="font-size: 12px; opacity: 0.9;">Loss PLC: {loss_plc} dB</div>
         </div>
         """, unsafe_allow_html=True)
 
     if loss_jalur > 0:
-        st.caption(f"*Hasil di atas sudah termasuk akumulasi redaman jalur sebesar **{loss_jalur:.2f} dB**.")
+        st.caption(f"*Hasil di atas sudah dikurangi loss jalur sebesar **{loss_jalur:.2f} dB**.")
 
 # ---------------------------------------------------------
-# 7. HALAMAN: AUTO PLANNER
+# 7. HALAMAN: AUTO PLANNER (Dengan Keterangan Out Kaki Kecil)
 # ---------------------------------------------------------
 def to_excel(df):
     output = io.BytesIO()
@@ -221,25 +241,46 @@ def show_autoplanner():
             
             best_r = None
             for r, loss in LOSS_RASIO.items():
-                rx = p_tiang - loss[0] - l_plc
+                drop_kecil = p_tiang - loss[0]
+                rx = drop_kecil - l_plc
                 if rx >= l_rx:
-                    best_r, rx_f, p_next = r, rx, p_tiang - loss[1]
+                    best_r, drop_f, rx_f, p_next = r, drop_kecil, rx, p_tiang - loss[1]
                     break
             
             if best_r:
-                topologi.append({"Node": f"ODP {idx}", "Tipe": "Rasio", "Rasio": best_r, "Jarak": round(total_d,2), "Rx": round(rx_f,2), "Next": round(p_next,2)})
+                topologi.append({
+                    "Node": f"ODP {idx}", 
+                    "Tipe": "Rasio", 
+                    "Rasio": best_r, 
+                    "Drop_Kecil": round(drop_f,2),
+                    "Jarak": round(total_d,2), 
+                    "Rx": round(rx_f,2), 
+                    "Next": round(p_next,2)
+                })
                 curr_p, idx = p_next, idx + 1
             else:
                 rx_t = p_tiang - l_plc
                 if rx_t >= l_rx:
-                    topologi.append({"Node": f"ODP {idx}", "Tipe": "Terminasi", "Rasio": "Direct PLC", "Jarak": round(total_d,2), "Rx": round(rx_t,2), "Next": None})
+                    topologi.append({
+                        "Node": f"ODP {idx}", 
+                        "Tipe": "Terminasi", 
+                        "Rasio": "Direct PLC", 
+                        "Drop_Kecil": round(p_tiang,2), # Untuk terminasi, power input = p_tiang
+                        "Jarak": round(total_d,2), 
+                        "Rx": round(rx_t,2), 
+                        "Next": None
+                    })
                 break
 
         if not topologi:
             st.error("Power tidak cukup untuk ditarik ke ODP pertama. Coba naikkan Power OLT atau turunkan limit Rx.")
         else:
             st.success(f"✅ ESTIMASI: MAKSIMAL {len(topologi)} ODP")
-            st.download_button("📊 Export Excel", data=to_excel(pd.DataFrame(topologi)), file_name="ftth_plan.xlsx", use_container_width=True)
+            
+            # Export DataFrame disusun ulang agar enak dibaca di Excel
+            df_export = pd.DataFrame(topologi)
+            df_export = df_export.rename(columns={'Drop_Kecil': 'Input PLC (dBm)'})
+            st.download_button("📊 Export Excel", data=to_excel(df_export), file_name="ftth_plan.xlsx", use_container_width=True)
             st.write("")
             
             for d in topologi:
@@ -247,12 +288,23 @@ def show_autoplanner():
                 cls = "timeline-node terminasi" if is_t else "timeline-node"
                 rx_cls = "rx-aman" if d['Rx'] >= l_rx else "rx-bahaya"
                 
+                # Menentukan Teks Rasio dan Keterangan Output Kaki Kecil
+                if is_t:
+                    info_rasio = f'🏁 <b style="color:#28A745;">TERMINASI JALUR</b><br>'
+                    info_kaki_kecil = f'<span style="font-size: 13px; color: gray;">Input murni ke PLC: {d["Drop_Kecil"]:+.2f} dBm</span><br>'
+                else:
+                    info_rasio = f'Rasio: <b>{d["Rasio"]}</b><br>'
+                    info_kaki_kecil = f'<span style="font-size: 13px; color: gray;">Out Kaki Kecil: {d["Drop_Kecil"]:+.2f} dBm</span><br>'
+
+                info_lanjut = f'<small style="color:#007BFF; font-weight:600;">Power Lanjut: {d["Next"]:+.2f} dBm</small>' if not is_t else ''
+
                 st.markdown(f"""
                 <div class="{cls}">
                     <b>{d['Node']}</b> ({d['Jarak']} km)<br>
-                    { '🏁 <b style="color:#28A745;">TERMINASI JALUR</b>' if is_t else f'Rasio: <b>{d["Rasio"]}</b>' }<br>
+                    {info_rasio}
+                    {info_kaki_kecil}
                     <div class="rx-box {rx_cls}">Rx ONT: {d['Rx']:+.2f} dBm</div><br>
-                    { f'<small style="color:#007BFF; font-weight:600;">Power Lanjut: {d["Next"]:+.2f} dBm</small>' if not is_t else '' }
+                    {info_lanjut}
                 </div>
                 """, unsafe_allow_html=True)
 
